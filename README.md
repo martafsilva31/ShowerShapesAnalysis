@@ -32,11 +32,3 @@ source setup.sh
   - Located at `../showershapereweighting/`
 
 ## Task List
-
-- [x] Compute r_eta and r_phi from Layer 2 cells (7x7 window) and validate against unfudged values
-- [ ] Add fudged variable overlay on plots
-- [ ] Make comparison plot for w_eta_2
-- [ ] Understand why 2022 data did not pass the good run list
-- [ ] Run on data24 (`data24_13p6TeV:data24_13p6TeV.00473235.physics_Main.merge.AOD.r15810_p6304`)
-- [ ] Add random noise to MC cells
-- [ ] Apply Francisco's cell-based shower shape reweighting correction

@@ -1,9 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 
-# Always submit from the workspace root (so pathena ships the right sandbox)
-WORKDIR="/project/atlas/users/mfernand/QT/NTupleMaker_workspace"
-cd "${WORKDIR}"
+# Submit data22 eegamma NTupleMaker jobs to the grid
+#
+# NOTE: The runs below (428xxx) are NOT in the data22 GRL (which starts at 431810).
+#       These will produce 0 events. Update run numbers before resubmitting.
+
+WORKDIR="/project/atlas/users/mfernand/QT/ShowerShapes/NTupleMaker_workspace"
+
+# --- Environment setup ---
+export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
+source "${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh" --quiet
+asetup Athena,25.0.40
+source "${WORKDIR}/build/x86_64-el9-gcc14-opt/setup.sh" 2>/dev/null \
+  || source "${WORKDIR}/build/x86_64-el9-gcc13-opt/setup.sh"
+lsetup panda rucio
+
+# Ensure valid grid proxy
+voms-proxy-info --exists 2>/dev/null || voms-proxy-init -voms atlas
+
+# Must submit from the run/ directory inside the workspace
+cd "${WORKDIR}/run"
 
 samples_data22=(
   data22_13p6TeV:data22_13p6TeV.00428648.physics_Main.merge.AOD.r15869_p6304_tid40703502_00

@@ -1,4 +1,23 @@
 #!/bin/bash
+set -euo pipefail
+
+# Submit mc23e Zllg NTupleMaker jobs to the grid
+
+WORKDIR="/project/atlas/users/mfernand/QT/ShowerShapes/NTupleMaker_workspace"
+
+# --- Environment setup ---
+export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
+source "${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh" --quiet
+asetup Athena,25.0.40
+source "${WORKDIR}/build/x86_64-el9-gcc14-opt/setup.sh" 2>/dev/null \
+  || source "${WORKDIR}/build/x86_64-el9-gcc13-opt/setup.sh"
+lsetup panda rucio
+
+# Ensure valid grid proxy
+voms-proxy-info --exists 2>/dev/null || voms-proxy-init -voms atlas
+
+# Must submit from the run/ directory inside the workspace
+cd "${WORKDIR}/run"
 
 samples_mc23e=(
 	mc23_13p6TeV:mc23_13p6TeV.700770.Sh_2214_eegamma.merge.AOD.e8514_e8586_s4369_s4370_r16083_r15970
