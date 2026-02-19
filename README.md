@@ -1,11 +1,11 @@
-# Shower Shape Analysis
+# ShowerShapesAnalysis
 
 Analysis scripts and grid submission for the ATLAS photon shower shape reweighting study.
 
 ## Directory Structure
 
 ```
-analysis/
+ShowerShapesAnalysis/
 ├── scripts/        # Analysis scripts (compute_reta_rphi.py, plot_reta_rphi.C, ...)
 ├── grid/           # Grid submission scripts (pathena)
 │   └── samples/    # Sample lists (dataset names)

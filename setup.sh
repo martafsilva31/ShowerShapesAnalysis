@@ -2,10 +2,10 @@
 # Setup environment for shower shape analysis
 # Source this from the ShowerShapes/ directory:
 #   cd /project/atlas/users/mfernand/QT/ShowerShapes
-#   source analysis/setup.sh
+#   source ShowerShapesAnalysis/setup.sh
 
 export SHOWERSHAPES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export ANALYSIS_DIR="${SHOWERSHAPES_DIR}/analysis"
+export ANALYSIS_DIR="${SHOWERSHAPES_DIR}/ShowerShapesAnalysis"
 export NTUPLE_WORKSPACE="${SHOWERSHAPES_DIR}/NTupleMaker_workspace"
 
 echo "ShowerShapes directory: ${SHOWERSHAPES_DIR}"
