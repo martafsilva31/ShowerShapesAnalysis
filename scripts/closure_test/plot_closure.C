@@ -82,31 +82,27 @@ void drawVariable(TH1D* hMC, TH1D* hPS, TH1D* hM1, TH1D* hM2,
     hM2->Draw("HIST SAME");
     hPS->Draw("P SAME");
 
-    // Legend — position adjusted for w_eta2 (distribution peaks left)
-    bool isWeta2 = (TString(varName) == "weta2");
-    double legX1 = isWeta2 ? 0.16 : 0.55;
-    double legX2 = isWeta2 ? 0.52 : 0.88;
-    TLegend* leg = new TLegend(legX1, 0.58, legX2, 0.78);
+    // Legend — top-right inside the pad
+    TLegend* leg = new TLegend(0.55, 0.58, 0.88, 0.78);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextSize(0.040);
     leg->AddEntry(hPS, "Pseudo-data", "lp");
     leg->AddEntry(hMC, "Original MC", "l");
-    leg->AddEntry(hM1, "Reweighted (Shift Only)", "l");
-    leg->AddEntry(hM2, "Reweighted (Shift + Stretch)", "l");
+    leg->AddEntry(hM1, "Rew. (Shift Only)", "l");
+    leg->AddEntry(hM2, "Rew. (Shift+Stretch)", "l");
     leg->Draw();
 
-    // ATLAS Internal + eta bin label
-    double atlasX = isWeta2 ? 0.55 : 0.18;
+    // ATLAS Internal + eta bin label — top-left
     TLatex lat;
     lat.SetNDC();
     lat.SetTextSize(0.050);
     lat.SetTextFont(72);
-    lat.DrawLatex(atlasX, 0.86, "ATLAS");
+    lat.DrawLatex(0.18, 0.86, "ATLAS");
     lat.SetTextFont(42);
-    lat.DrawLatex(atlasX + 0.12, 0.86, "Internal");
+    lat.DrawLatex(0.30, 0.86, "Internal");
     lat.SetTextSize(0.040);
-    lat.DrawLatex(atlasX, 0.80, Form("%s, |#eta| #in [%.2f, %.2f)",
+    lat.DrawLatex(0.18, 0.80, Form("%s, |#eta| #in [%.2f, %.2f)",
                                    varTitle, kEtaLimits[etaBin], kEtaLimits[etaBin + 1]));
 
     // --- Lower pad: ratio to pseudo-data ---

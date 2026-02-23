@@ -33,7 +33,6 @@ NOISE_SIGMA=${3:--1}
 PCT_LABEL=$(echo "${DIST_LEVEL}" | awk '{printf "%g", $1*100}')pct
 
 OUTPUT_DIR="${SCRIPT_DIR}/../../output/closure_test_${PCT_LABEL}"
-PLOT_DIR="${SCRIPT_DIR}/../../plots/closure_test_${PCT_LABEL}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -48,15 +47,13 @@ echo ""
 echo "Script directory:   ${SCRIPT_DIR}"
 echo "Input file:         ${INPUT_FILE}"
 echo "Output directory:   ${OUTPUT_DIR}"
-echo "Plot directory:     ${PLOT_DIR}"
 echo "Events to process:  ${N_EVENTS}"
 echo "Distortion level:   ${DIST_LEVEL} (${PCT_LABEL})"
 echo "Noise sigma:        ${NOISE_SIGMA} (-1 = auto: level/2)"
 echo ""
 
-# Create output directories if needed
+# Create output directory if needed
 mkdir -p "${OUTPUT_DIR}"
-mkdir -p "${PLOT_DIR}"
 
 cd "${SCRIPT_DIR}"
 
@@ -108,7 +105,7 @@ echo ""
 # Step 5: Generate plots
 # =============================================================================
 echo -e "${GREEN}[6/6] Generating plots...${NC}"
-root -l -b -q "plot_closure.C(\"${OUTPUT_DIR}/closure_histos.root\", \"${PLOT_DIR}/\")"
+root -l -b -q "plot_closure.C(\"${OUTPUT_DIR}/closure_histos.root\", \"${OUTPUT_DIR}/\")"
 echo ""
 
 # =============================================================================
@@ -122,6 +119,6 @@ echo "Output files:"
 ls -lh "${OUTPUT_DIR}"/*.root
 echo ""
 echo "Plot files:"
-ls -lh "${PLOT_DIR}"/*.pdf 2>/dev/null || echo "(no PDF files yet)"
+ls -lh "${OUTPUT_DIR}"/*.pdf 2>/dev/null || echo "(no PDF files yet)"
 echo ""
 echo -e "${GREEN}Done.${NC}"

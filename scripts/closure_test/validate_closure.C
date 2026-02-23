@@ -76,6 +76,10 @@ void fillHistos(const char* filename, Long64_t maxEvents,
         int etaBin = findEtaBin(std::fabs(eta2));
         if (etaBin < 0) continue;
 
+        // Clamp negative cell energies and check cluster quality
+        clampCellEnergies(*cellE);
+        if (!isHealthyCluster(*cellE)) continue;
+
         double Etot = 0;
         for (int k = 0; k < kClusterSize; ++k)
             Etot += cellE->at(k);
@@ -167,8 +171,8 @@ int validate_closure(const char* mcFile,
     // Normalise and compute chi2
     // ======================================================================
     std::cout << "\n=== Closure metrics (chi2/ndf) ===" << std::endl;
-    std::cout << "EtaBin |   R_eta M1   R_eta M2 |   R_phi M1   R_phi M2 |  w_eta2 M1  w_eta2 M2" << std::endl;
-    std::cout << "-------|----------------------|----------------------|----------------------" << std::endl;
+    std::cout << "EtaBin |     R_eta MC    R_eta M1   R_eta M2 |     R_phi MC    R_phi M1   R_phi M2 |    w_eta2 MC   w_eta2 M1  w_eta2 M2" << std::endl;
+    std::cout << "-------|--------------------------------------|--------------------------------------|--------------------------------------" << std::endl;
 
     for (int n = 0; n < kNEtaBins; ++n) {
         if (h_reta_ps[n]->GetEntries() < 100) continue;
@@ -191,17 +195,20 @@ int validate_closure(const char* mcFile,
 
         // Compare reweighted MC to pseudo-data (not MC)
         int ndf;
+        double chi2_reta_mc = computeChi2(h_reta_mc[n], h_reta_ps[n], ndf);
         double chi2_reta_m1 = computeChi2(h_reta_m1[n], h_reta_ps[n], ndf);
         double chi2_reta_m2 = computeChi2(h_reta_m2[n], h_reta_ps[n], ndf);
+        double chi2_rphi_mc = computeChi2(h_rphi_mc[n], h_rphi_ps[n], ndf);
         double chi2_rphi_m1 = computeChi2(h_rphi_m1[n], h_rphi_ps[n], ndf);
         double chi2_rphi_m2 = computeChi2(h_rphi_m2[n], h_rphi_ps[n], ndf);
+        double chi2_weta2_mc = computeChi2(h_weta2_mc[n], h_weta2_ps[n], ndf);
         double chi2_weta2_m1 = computeChi2(h_weta2_m1[n], h_weta2_ps[n], ndf);
         double chi2_weta2_m2 = computeChi2(h_weta2_m2[n], h_weta2_ps[n], ndf);
 
-        std::cout << Form("%6d | %10.4f %10.4f | %10.4f %10.4f | %10.4f %10.4f",
-                          n, chi2_reta_m1, chi2_reta_m2,
-                          chi2_rphi_m1, chi2_rphi_m2,
-                          chi2_weta2_m1, chi2_weta2_m2) << std::endl;
+        std::cout << Form("%6d | %12.4f %10.4f %10.4f | %12.4f %10.4f %10.4f | %12.4f %10.4f %10.4f",
+                          n, chi2_reta_mc, chi2_reta_m1, chi2_reta_m2,
+                          chi2_rphi_mc, chi2_rphi_m1, chi2_rphi_m2,
+                          chi2_weta2_mc, chi2_weta2_m1, chi2_weta2_m2) << std::endl;
     }
 
     // ======================================================================

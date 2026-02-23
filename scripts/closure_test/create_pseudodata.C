@@ -138,6 +138,14 @@ int create_pseudodata(const char* inputFile,
             continue;
         }
 
+        // Clamp negative cell energies and check cluster quality
+        clampCellEnergies(*cellE);
+        if (!isHealthyCluster(*cellE)) {
+            nPassthrough++;
+            tout->Fill();
+            continue;
+        }
+
         double Etot = 0;
         for (int k = 0; k < kClusterSize; ++k)
             Etot += cellE->at(k);

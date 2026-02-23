@@ -165,12 +165,9 @@ cd scripts/closure_test/
 ### Output
 
 ```
-output/closure_test_1pct/    # ROOT files for 1% level
-output/closure_test_3pct/    # ROOT files for 3% level
-output/closure_test_5pct/    # ROOT files for 5% level
-plots/closure_test_1pct/     # PDFs for 1% level
-plots/closure_test_3pct/     # PDFs for 3% level
-plots/closure_test_5pct/     # PDFs for 5% level
+output/closure_test_1pct/    # ROOT files + PDFs for 1% level
+output/closure_test_3pct/    # ROOT files + PDFs for 3% level
+output/closure_test_5pct/    # ROOT files + PDFs for 5% level
 ```
 
 ## Reproducibility
@@ -201,7 +198,7 @@ Each step can also be run individually:
 ```bash
 INPUT=../../ntuples/mc23e/mc23e_700770_Zeeg.root
 OUTDIR=../../output/closure_test_5pct
-PLOTDIR=../../plots/closure_test_5pct
+PLOTDIR=../../output/closure_test_5pct
 LEVEL=0.05
 N=500000
 
@@ -249,8 +246,26 @@ This pipeline follows the supervisor's `showershapereweighting` package
 | Correction apply | `Interpolate(f_MC)` | `Interpolate(MC_fraction)` | Identical |
 | Cell data type | `double` (MC23e) | `float` (Run 2) | MC23e stores doubles |
 | $w_{\eta\,2}$ | Relative eta positions | Absolute eta from `clusterEta` | MC23e lacks `clusterEta`; see below |
-| Negative cells | Allowed (no clamping) | Same | Both allow negative cell energies |
+| Negative cells | Clamped to 0 | Pre-selected (no negatives) | MC23e needs clamping; see below |
+| Cluster quality | `isHealthyCluster` check | Pre-selected matched pairs | MC23e needs explicit quality cut |
 | Conversion type | Not binned | 3 types (Inc/NCon/Con) | To be added for real data |
+
+### Quality cuts for MC23e ntuples
+
+The supervisor's ntuples use pre-selected, matched photon pairs with tight
+identification and high-$p_\text{T}$ cuts, so negative cell energies and
+mis-centred clusters are extremely rare. MC23e ntuples contain all photon
+candidates without such selection, so two quality functions are applied:
+
+- **`clampCellEnergies()`**: Sets any negative cell energy to zero. Negative
+  energies are measurement artifacts that create unphysical fractions and
+  corrupt the correction derivation (especially Method 1's flat shift).
+- **`isHealthyCluster()`**: Requires the central cell (cell 38 in the 7×11
+  grid) to have the highest energy fraction in the cluster. This rejects
+  mis-centred or pathological clusters that would bias the correction profiles.
+
+These are applied consistently in all pipeline stages (pseudo-data creation,
+correction derivation, correction application, and validation).
 
 ### Note on $w_{\eta\,2}$ calculation
 

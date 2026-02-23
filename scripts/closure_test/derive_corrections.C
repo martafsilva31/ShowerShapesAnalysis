@@ -170,6 +170,11 @@ int derive_corrections(const char* mcFile,
         int etaBin = findEtaBin(std::fabs(eta2MC));
         if (etaBin < 0) continue;
 
+        // Clamp negative cell energies and check cluster quality
+        clampCellEnergies(*cellMC);
+        clampCellEnergies(*cellPS);
+        if (!isHealthyCluster(*cellMC) || !isHealthyCluster(*cellPS)) continue;
+
         // Compute total energies
         double EtotMC = 0, EtotPS = 0;
         for (int k = 0; k < kClusterSize; ++k) {

@@ -83,6 +83,40 @@ namespace closure {
     }
 
     // ======================================================================
+    // Cluster quality checks for MC23e ntuples
+    // ======================================================================
+    // The supervisor's ntuples are pre-selected matched data-MC pairs with
+    // tight cuts. MC23e ntuples contain all photon candidates including
+    // low-pT, miscentered, and noise-dominated clusters. These functions
+    // replicate the implicit quality cuts of the supervisor's selection.
+
+    // Clamp negative cell energies to zero.
+    // Negative energies come from electronic noise subtraction and create
+    // unphysical fractions that corrupt TProfile corrections.
+    inline void clampCellEnergies(std::vector<double>& cells) {
+        for (int k = 0; k < kClusterSize; ++k) {
+            if (cells[k] < 0) cells[k] = 0;
+        }
+    }
+
+    // Check that the central cell has the highest energy fraction.
+    // Miscentered clusters (where the hottest cell is off-center) produce
+    // anomalous fractions that bias the correction derivation.
+    inline bool isHealthyCluster(const std::vector<double>& cells) {
+        double Etot = 0;
+        for (int k = 0; k < kClusterSize; ++k)
+            Etot += cells[k];
+        if (Etot <= 0) return false;
+
+        double centralFrac = cells[kCentralCell] / Etot;
+        for (int k = 0; k < kClusterSize; ++k) {
+            if (k == kCentralCell) continue;
+            if (cells[k] / Etot > centralFrac) return false;
+        }
+        return true;
+    }
+
+    // ======================================================================
     // Find eta bin index for a given |eta| value
     // Returns -1 if outside range
     // ======================================================================

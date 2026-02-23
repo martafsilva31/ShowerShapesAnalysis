@@ -66,5 +66,4 @@ echo "Output directories:"
 for LEVEL in "${LEVELS[@]}"; do
     PCT=$(echo "${LEVEL}" | awk '{printf "%g", $1*100}')pct
     echo "  output/closure_test_${PCT}/"
-    echo "  plots/closure_test_${PCT}/"
 done
