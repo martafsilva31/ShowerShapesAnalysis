@@ -42,10 +42,13 @@ namespace closure {
         1.52, 1.6, 1.80, 2.0, 2.2, 2.4
     };
 
-    // Energy fraction bins for TProfile (matching supervisor's EBins in var.h)
-    const int kNFracBins = 14;
+    // Energy fraction bins for CellCorrection TProfile
+    // (matching supervisor's EBins in tree.h — NOT var.h which is for ClusterCorrection in GeV)
+    // Cell fractions f_k = e_k / E_tot live in [~-0.1, ~0.5], so these bins
+    // give fine resolution where data actually populates.
+    const int kNFracBins = 12;
     const double kFracBins[kNFracBins + 1] = {
-        0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12.5, 15
+        -1., -0.5, -0.4, -0.3, -0.2, -0.1, 0., 0.1, 0.2, 0.3, 0.4, 0.5, 1.
     };
 
     // ======================================================================

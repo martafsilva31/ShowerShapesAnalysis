@@ -64,11 +64,20 @@ $$
 
 This captures the energy-dependent (linear) relationship between the correction
 and the cell fraction, following the approach in the supervisor's `tree.C`.
-The TProfile uses the same binning as the supervisor's `var.h`:
+The TProfile uses the same fraction binning as the supervisor's `tree.h`:
 
 ```
-EBins = {0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12.5, 15}
+EBins = {-1, -0.5, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 1}
 ```
+
+**Important:** The supervisor has two `EBins` definitions in different files:
+- `tree.h`: `EBins = {-1, ..., 0.5, 1}` (12 bins) — for **CellCorrection** (cell energy fractions)
+- `var.h`: `EBins = {0, 0.5, ..., 15}` (14 bins) — for **ClusterCorrection** (cluster energy in GeV)
+
+We use the `tree.h` bins because CellCorrection operates on cell fractions
+$f_k \in [0, \sim0.5]$, and these bins provide 6 bins with 0.1 resolution in
+that range. Using the `var.h` bins would collapse all fraction data into a
+single [0, 0.5] bin, destroying Method 2's energy-dependent resolution.
 
 ### 3. Correction application (`apply_corrections.C`)
 
@@ -128,6 +137,7 @@ One page per $|\eta|$ bin, one PDF per variable.
 | `plot_closure.C` | Generate comparison plots with ratio panels |
 | `run_closure_test.sh` | Single-level driver script (6 pipeline steps) |
 | `run_closure_suite.sh` | Multi-level wrapper (runs 1%, 3%, 5%) |
+| `README.md` | This documentation |
 
 ## Running
 
@@ -163,16 +173,76 @@ plots/closure_test_3pct/     # PDFs for 3% level
 plots/closure_test_5pct/     # PDFs for 5% level
 ```
 
+## Reproducibility
+
+### Full run from scratch
+
+```bash
+# 1. Set up environment
+setupATLAS
+lsetup "root 6.32.08-x86_64-el9-gcc13-opt"
+
+# 2. Navigate to the closure test directory
+cd /project/atlas/users/mfernand/QT/ShowerShapes/ShowerShapesAnalysis/scripts/closure_test/
+
+# 3. Run full suite (1%, 3%, 5% distortion, 500k events each)
+bash run_closure_suite.sh 500000
+
+# 4. Or run a single level
+bash run_closure_test.sh 500000 0.05    # 5% distortion
+bash run_closure_test.sh 500000 0.03    # 3% distortion
+bash run_closure_test.sh 500000 0.01    # 1% distortion
+```
+
+### Pipeline steps (manual)
+
+Each step can also be run individually:
+
+```bash
+INPUT=../../ntuples/mc23e/mc23e_700770_Zeeg.root
+OUTDIR=../../output/closure_test_5pct
+PLOTDIR=../../plots/closure_test_5pct
+LEVEL=0.05
+N=500000
+
+# Step 1: Create pseudo-data
+root -l -b -q "create_pseudodata.C(\"$INPUT\", \"$OUTDIR/pseudo.root\", $N, $LEVEL)"
+
+# Step 2: Derive corrections
+root -l -b -q "derive_corrections.C(\"$INPUT\", \"$OUTDIR/pseudo.root\", \"$OUTDIR/corrections.root\", $N)"
+
+# Step 3: Apply Method 1 (flat shift)
+root -l -b -q "apply_corrections.C(\"$INPUT\", \"$OUTDIR/corrections.root\", \"$OUTDIR/reweighted_m1.root\", $N, 1)"
+
+# Step 4: Apply Method 2 (TProfile)
+root -l -b -q "apply_corrections.C(\"$INPUT\", \"$OUTDIR/corrections.root\", \"$OUTDIR/reweighted_m2.root\", $N, 2)"
+
+# Step 5: Validate (compute chi2)
+root -l -b -q "validate_closure.C(\"$INPUT\", \"$OUTDIR\", \"$OUTDIR/closure_histos.root\", $N)"
+
+# Step 6: Plot
+root -l -b -q "plot_closure.C(\"$OUTDIR/closure_histos.root\", \"$PLOTDIR/\")"
+```
+
+### Input data
+
+- **MC23e ntuple**: `ntuples/mc23e/mc23e_700770_Zeeg.root` (13 GB, 9.6M events, DSID 700770)
+- **Tree name**: `tree`
+- **Key branches**:
+  - `photon.7x11ClusterLr2E` (`vector<double>`, 77 cell energies in MeV)
+  - `photon.7x11ClusterLr2Size` (`int`, always 77 for good clusters)
+  - `photon_cluster.eta2` (`float`, cluster η in Layer 2)
+
 ## Design Notes
 
 ### Matching the supervisor's implementation
 
 This pipeline follows the supervisor's `showershapereweighting` package
-(`tree.C` + `var.h`) as closely as possible:
+(`tree.C` + `tree.h` + `var.h`) as closely as possible:
 
 | Aspect | This code | Supervisor's code | Note |
 |--------|-----------|-------------------|------|
-| TProfile bins | `EBins` from `var.h` | Same | Matched exactly |
+| TProfile bins | `EBins` from `tree.h` | Same | 12 fraction bins [-1, 1] |
 | Eta binning | 14 bins, [0, 2.4] | Same | Matched exactly |
 | Energy function | Same `Energy(eta,phi,cells)` | Same | Same sub-window logic |
 | Correction fill | `Fill(f_MC, f_PS − f_MC)` | `Fill(x, alpha)` | Identical |
