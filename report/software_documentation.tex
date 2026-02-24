@@ -1,0 +1,1055 @@
+% ============================================================================
+%  ShowerShapesAnalysis — Software Documentation
+% ============================================================================
+\documentclass[12pt,a4paper]{article}
+
+% --- Packages ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm,headheight=15pt]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{array}
+
+% --- Page style -------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small ShowerShapesAnalysis — Software Documentation}
+\fancyhead[R]{\small ATLAS Internal}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Hyperref setup ---------------------------------------------------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black
+}
+
+% --- Listings style ---------------------------------------------------------
+\definecolor{codebg}{gray}{0.96}
+\definecolor{codegreen}{rgb}{0.2,0.5,0.2}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+
+\lstdefinestyle{shellstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{codegray},
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  framesep=3pt,
+  numbers=none,
+  showstringspaces=false,
+  commentstyle=\color{codegreen}\itshape,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  stringstyle=\color{red!60!black},
+  language=bash,
+  morekeywords={root,python,bash,setupATLAS,lsetup,asetup,pathena,
+    voms-proxy-init,source,cd,mkdir},
+  literate={~}{{\raisebox{0.5ex}{\texttildelow}}}{1},
+}
+
+\lstdefinestyle{cppstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{codegray},
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  framesep=3pt,
+  numbers=left,
+  numberstyle=\tiny\color{codegray},
+  showstringspaces=false,
+  commentstyle=\color{codegreen}\itshape,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  stringstyle=\color{red!60!black},
+  language=C++,
+}
+
+\lstset{style=shellstyle}
+
+% --- Title ------------------------------------------------------------------
+\title{%
+  \textbf{ShowerShapesAnalysis}\\[6pt]
+  \large Software Documentation\\[4pt]
+  \large Photon Shower Shape Reweighting — MC23e\\[4pt]
+  \normalsize Version 1.0
+}
+\author{ATLAS Simulation}
+\date{\today}
+
+% ============================================================================
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\tableofcontents
+\clearpage
+
+% ============================================================================
+\section{Overview}
+\label{sec:overview}
+% ============================================================================
+
+\texttt{ShowerShapesAnalysis} is a ROOT/Python analysis package for
+studying and correcting photon electromagnetic shower shape variables
+using cell-level calorimeter information from ATLAS MC23e simulated
+ntuples.
+
+The package provides two main capabilities:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Shower shape validation}: Recomputes the shower shape
+    variables $R_\eta$, $R_\phi$, and $w_{\eta\,2}$ directly from
+    Layer-2 cell energies and compares them against the stored (fudged
+    and unfudged) values in the ntuples. This validates the cell-level
+    computation.
+
+  \item \textbf{Cell-energy reweighting closure test}: A complete
+    pipeline that generates pseudo-data by distorting MC cell energies,
+    derives per-cell reweighting corrections, applies them, and
+    evaluates how well the corrected MC recovers the pseudo-data
+    distributions. Two correction methods are implemented and compared.
+\end{enumerate}
+
+The package is designed to run on CERN lxplus (EL9) with ROOT~6.32+
+available via the ATLAS software distribution on CVMFS. It operates on
+ntuples produced by the \texttt{NTupleMaker} Athena algorithm, which
+stores the $7\times11$ Layer-2 cell energies for each photon candidate.
+
+% ============================================================================
+\section{Software Requirements}
+\label{sec:requirements}
+% ============================================================================
+
+\subsection{Operating system}
+
+The package is developed and tested on CERN lxplus nodes running
+AlmaLinux~9 (EL9). It should work on any Linux system with access to
+CVMFS.
+
+\subsection{Required software}
+
+\begin{table}[htbp]
+\centering
+\caption{Software dependencies.}
+\label{tab:requirements}
+\begin{tabular}{llp{7.5cm}}
+\toprule
+\textbf{Software} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+ROOT & $\geq$ 6.32 & Event processing, histogramming, plotting, C++ JIT
+  compilation via \texttt{gInterpreter} \\
+Python & 3.9+ & Shower shape validation scripts
+  (bundled with ROOT distribution) \\
+Athena & 25.0.40 & NTupleMaker compilation (ntuple production only) \\
+pathena & (via \texttt{lsetup panda}) & Grid job submission
+  (ntuple production only) \\
+rucio & (via \texttt{lsetup rucio}) & Dataset management
+  (ntuple production only) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Note.} Athena, pathena, and rucio are required only for
+producing the input ntuples from AOD files on the grid. If pre-produced
+ntuples are already available, only ROOT~6.32+ is needed.
+
+\subsection{Python libraries}
+
+The Python scripts use only \texttt{ROOT} (PyROOT) and \texttt{numpy},
+both of which are included in the ROOT distribution available on CVMFS.
+No additional \texttt{pip install} is required.
+
+% ============================================================================
+\section{Installation}
+\label{sec:installation}
+% ============================================================================
+
+\subsection{Obtaining the repository}
+
+Clone the repository from GitHub:
+
+\begin{lstlisting}
+git clone git@github.com:martafsilva31/ShowerShapesAnalysis.git
+cd ShowerShapesAnalysis
+\end{lstlisting}
+
+\subsection{Environment setup}
+
+On lxplus, source the provided setup script. This configures the ATLAS
+software environment (Athena + ROOT) and optionally sources the
+NTupleMaker build:
+
+\begin{lstlisting}
+# Navigate to the parent ShowerShapes directory
+cd /path/to/ShowerShapes/
+source ShowerShapesAnalysis/setup.sh
+\end{lstlisting}
+
+The setup script performs the following steps:
+\begin{enumerate}[leftmargin=2em]
+  \item Sets environment variables \texttt{SHOWERSHAPES\_DIR} and
+    \texttt{ANALYSIS\_DIR}.
+  \item Runs \texttt{setupATLAS} and \texttt{asetup Athena,25.0.40}.
+  \item Sources the NTupleMaker build (if present).
+  \item Defines convenience aliases (\texttt{cdanalysis},
+    \texttt{cdntuples}, etc.).
+\end{enumerate}
+
+\paragraph{Minimal setup (analysis only).} If ntuples are already
+available and no Athena build is needed, a lightweight alternative is:
+
+\begin{lstlisting}
+setupATLAS
+lsetup "root 6.32.08-x86_64-el9-gcc13-opt"
+\end{lstlisting}
+
+\subsection{Compilation}
+
+No compilation step is required. The C++ ROOT macros are compiled
+at runtime via ROOT's JIT compiler (\texttt{gInterpreter}). The closure
+test macros include \texttt{config.h} as a shared header, which ROOT
+processes automatically when the macro is invoked.
+
+% ============================================================================
+\section{Repository Structure}
+\label{sec:structure}
+% ============================================================================
+
+\begin{table}[htbp]
+\centering
+\caption{Top-level directory layout.}
+\label{tab:dirs}
+\small
+\begin{tabular}{lp{10cm}}
+\toprule
+\textbf{Path} & \textbf{Description} \\
+\midrule
+\texttt{scripts/}         & Analysis scripts (Python + ROOT C++ macros) \\
+\texttt{scripts/closure\_test/} & Closure test pipeline (6 C++ macros +
+  shell drivers) \\
+\texttt{grid/}             & Grid submission scripts for ntuple production
+  via pathena \\
+\texttt{grid/samples/}     & Sample lists (dataset container names) \\
+\texttt{configs/}          & Configuration files (reserved for future use) \\
+\texttt{ntuples/}          & Input ntuples (gitignored; see \cref{sec:input}) \\
+\texttt{output/}           & All generated output: histograms, plots, closure
+  test results (gitignored) \\
+\texttt{report/}           & \LaTeX{} reports and compiled PDFs \\
+\texttt{setup.sh}          & Environment setup script \\
+\texttt{.github/}          & Copilot instruction files for AI-assisted
+  development \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Validation scripts (\texttt{scripts/})}
+
+\begin{table}[htbp]
+\centering
+\caption{Shower shape validation scripts.}
+\label{tab:scripts:validation}
+\small
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\texttt{utils.py}
+  & Shared Python utilities: argument parsing, TTree I/O helpers,
+    cell-energy window extraction, $w_{\eta\,2}$ computation. \\
+\texttt{compute\_reta.py}
+  & Recomputes $R_\eta = E(3\times7)/E(7\times7)$ from cell energies.
+    Compares with stored unfudged and fudged values. Outputs histogram
+    ROOT file. Uses JIT-compiled C++ for the inner loop. \\
+\texttt{compute\_rphi.py}
+  & Same as above for $R_\phi = E(3\times3)/E(3\times7)$. \\
+\texttt{compute\_weta\_2.py}
+  & Same for $w_{\eta\,2}$. Uses cluster $\eta_2$ plus relative cell
+    offsets. \\
+\texttt{plot\_reta.C}
+  & ROOT macro: reads histogram file, produces a single-page PDF with
+    an overlay of the three distributions (unfudged, fudged, computed)
+    and a ratio panel. \\
+\texttt{plot\_rphi.C}
+  & Same layout for $R_\phi$. \\
+\texttt{plot\_weta\_2.C}
+  & Same layout for $w_{\eta\,2}$. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Closure test pipeline (\texttt{scripts/closure\_test/})}
+
+\begin{table}[htbp]
+\centering
+\caption{Closure test source files and their roles.}
+\label{tab:scripts:closure}
+\small
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\texttt{config.h}
+  & Shared header defining cluster geometry, $|\eta|$ binning (14~bins),
+    energy-fraction binning (12~bins), branch names, quality-cut
+    functions, shower shape formulas, and the distortion bias pattern. \\
+\texttt{create\_pseudodata.C}
+  & Generates a pseudo-data ROOT file by applying systematic per-cell
+    bias plus Gaussian noise to MC cell energies. Conserves total
+    cluster energy. \\
+\texttt{derive\_corrections.C}
+  & Derives reweighting corrections by comparing MC and pseudo-data cell
+    fractions. Produces Method~1 (flat shift) and Method~2 (TProfile)
+    corrections, stored in a single ROOT file. \\
+\texttt{apply\_corrections.C}
+  & Reads corrections and applies them to MC cell energies. Outputs a
+    reweighted ntuple. Accepts a method flag (1 or 2). \\
+\texttt{validate\_closure.C}
+  & Fills shower shape histograms ($R_\eta$, $R_\phi$, $w_{\eta\,2}$)
+    per $|\eta|$ bin for MC, pseudo-data, Method~1, and Method~2.
+    Computes $\chi^2/n_\text{df}$ closure metrics. \\
+\texttt{plot\_closure.C}
+  & Generates multi-page comparison PDFs (one page per $|\eta|$ bin)
+    with overlay + ratio panels. \\
+\texttt{run\_closure\_test.sh}
+  & Driver script: runs all 6 pipeline steps for a single distortion
+    level. \\
+\texttt{run\_closure\_suite.sh}
+  & Wrapper: runs \texttt{run\_closure\_test.sh} at 1\%, 3\%, and 5\%
+    distortion levels. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Grid submission (\texttt{grid/})}
+
+\begin{table}[htbp]
+\centering
+\caption{Grid submission scripts.}
+\label{tab:scripts:grid}
+\small
+\begin{tabular}{lp{9cm}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\texttt{submit\_mc23e\_Zllg.sh}
+  & Submits pathena jobs for MC23e $Z\to\ell\ell\gamma$ samples
+    (DSIDs 700770, 700771). \\
+\texttt{submit\_data22.sh}
+  & Submits jobs for 2022 data runs. \\
+\texttt{submit\_data24.sh}
+  & Submits jobs for 2024 data (single run). \\
+\texttt{submit\_data24\_all.sh}
+  & Submits jobs for all 2024 data runs. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================================
+\section{Input Data}
+\label{sec:input}
+% ============================================================================
+
+\subsection{Expected directory layout}
+
+The analysis expects input ntuples under \texttt{ntuples/} with the
+following structure:
+
+\begin{lstlisting}
+ntuples/
+  mc23e/
+    mc23e_700770_Zeeg.root       # Z -> eeg MC (DSID 700770)
+    mc23e_700771_Zmumug.root     # Z -> mumug MC (DSID 700771)
+  data22/
+    data22_XXXXXXXX_Zeeg.root    # Data 2022 runs
+\end{lstlisting}
+
+\subsection{Ntuple format}
+
+The ntuples are produced by the \texttt{NTupleMaker} Athena algorithm
+and stored in a TTree named \texttt{tree}. The analysis uses the
+following branches:
+
+\begin{table}[htbp]
+\centering
+\caption{Required TTree branches (\texttt{tree}).}
+\label{tab:branches}
+\small
+\begin{tabular}{lll}
+\toprule
+\textbf{Branch name} & \textbf{Type} & \textbf{Description} \\
+\midrule
+\texttt{photon.7x11ClusterLr2E}
+  & \texttt{vector<double>}
+  & 77 cell energies (MeV) in the $7\eta\times11\phi$ Layer-2 window.
+    Stored in row-major order: $\phi$ varies fastest. \\[3pt]
+\texttt{photon.7x11ClusterLr2Size}
+  & \texttt{int}
+  & Number of cells (always 77 for valid clusters). \\[3pt]
+\texttt{photon\_cluster.eta2}
+  & \texttt{float}
+  & Cluster barycentre pseudorapidity in Layer~2. \\[3pt]
+\texttt{photon.reta}
+  & \texttt{float}
+  & Stored $R_\eta$ (fudged value). \\[3pt]
+\texttt{photon.unfudged\_reta}
+  & \texttt{float}
+  & Stored $R_\eta$ (unfudged value). \\[3pt]
+\texttt{photon.rphi}
+  & \texttt{float}
+  & Stored $R_\phi$ (fudged value). \\[3pt]
+\texttt{photon.unfudged\_rphi}
+  & \texttt{float}
+  & Stored $R_\phi$ (unfudged value). \\[3pt]
+\texttt{photon.weta2}
+  & \texttt{float}
+  & Stored $w_{\eta\,2}$ (fudged value). \\[3pt]
+\texttt{photon.unfudged\_weta2}
+  & \texttt{float}
+  & Stored $w_{\eta\,2}$ (unfudged value). \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Cell energy layout.}
+The 77 cell energies are arranged in a $7\times11$
+($\eta\times\phi$) grid. The flat index is calculated as:
+\begin{equation}
+  \text{index} = \eta_\text{row} \times 11 + \phi_\text{col},
+  \qquad
+  \eta_\text{row} \in [0,6],\;
+  \phi_\text{col} \in [0,10].
+\end{equation}
+The central cell corresponds to $(\eta_\text{row}, \phi_\text{col}) =
+(3, 5)$, i.e.\ flat index~38.
+
+\subsection{Sample details}
+
+The primary MC sample used is:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{DSID 700770}:
+    \texttt{Sh\_2214\_eegamma} ($Z\to ee\gamma$), MC23e 13.6~TeV
+  \item $\sim$9.6~million events, $\sim$13~GB
+  \item AOD container: \texttt{mc23\_13p6TeV.700770.Sh\_2214\_eegamma.%
+    merge.AOD.e8514\_e8586\_s4369\_s4370\_r16083\_r15970}
+\end{itemize}
+
+A secondary sample (DSID 700771, $Z\to\mu\mu\gamma$) is available for
+cross-checks.
+
+% ============================================================================
+\section{Running the Analysis}
+\label{sec:running}
+% ============================================================================
+
+All commands below assume the environment has been set up as described
+in \cref{sec:installation}.
+
+% ---------- 6.1 Validation -------------------------------------------------
+\subsection{Shower shape validation}
+\label{sec:running:validation}
+
+The validation workflow computes shower shape variables from cell
+energies and compares them against stored values. It consists of two
+steps per variable: a Python script that fills histograms, and a ROOT
+macro that produces comparison plots.
+
+\subsubsection{Step 1: Compute histograms}
+
+Run the Python compute scripts from the \texttt{scripts/} directory.
+Each script takes an input ntuple and produces a ROOT file containing
+histograms:
+
+\begin{lstlisting}
+cd scripts/
+
+# R_eta
+python compute_reta.py \
+  -i ../ntuples/mc23e/mc23e_700770_Zeeg.root \
+  -o ../output/reta_Zeeg.root
+
+# R_phi
+python compute_rphi.py \
+  -i ../ntuples/mc23e/mc23e_700770_Zeeg.root \
+  -o ../output/rphi_Zeeg.root
+
+# w_eta_2
+python compute_weta_2.py \
+  -i ../ntuples/mc23e/mc23e_700770_Zeeg.root \
+  -o ../output/weta2_Zeeg.root
+\end{lstlisting}
+
+Repeat with the $Z\to\mu\mu\gamma$ ntuple (replace
+\texttt{mc23e\_700770\_Zeeg.root} with
+\texttt{mc23e\_700771\_Zmumug.root} and adjust output names
+accordingly).
+
+\paragraph{Parameters.}
+\begin{itemize}[leftmargin=2em]
+  \item \texttt{-i}, \texttt{-{}-input}: Path to input ROOT ntuple
+    (required).
+  \item \texttt{-o}, \texttt{-{}-output}: Path to output ROOT
+    histogram file (required).
+  \item \texttt{-n}, \texttt{-{}-max-events}: Maximum number of events
+    to process. Default: $-1$ (all events).
+\end{itemize}
+
+\subsubsection{Step 2: Generate plots}
+
+Run the ROOT plotting macros. Each macro reads the histogram file from
+Step~1 and produces a single-page PDF:
+
+\begin{lstlisting}
+# R_eta plot
+root -l -b -q \
+  'plot_reta.C("../output/reta_Zeeg.root","../output/plots/reta_Zeeg")'
+
+# R_phi plot
+root -l -b -q \
+  'plot_rphi.C("../output/rphi_Zeeg.root","../output/plots/rphi_Zeeg")'
+
+# w_eta_2 plot
+root -l -b -q \
+  'plot_weta_2.C("../output/weta2_Zeeg.root","../output/plots/weta2_Zeeg")'
+\end{lstlisting}
+
+The output argument is the base filename (without extension); the macro
+appends \texttt{.pdf} automatically. Create the output directory first
+if it does not exist:
+
+\begin{lstlisting}
+mkdir -p ../output/plots
+\end{lstlisting}
+
+Each plot contains:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Upper panel}: Normalised distributions of three
+    variants — Unfudged/stored (blue), Fudged/stored (red), Computed
+    from cells (green dashed).
+  \item \textbf{Lower panel}: Ratio to the Unfudged baseline
+    (range 0.8--1.2).
+\end{itemize}
+
+% ---------- 6.2 Closure test -----------------------------------------------
+\subsection{Closure test}
+\label{sec:running:closure}
+
+The closure test validates the cell-energy reweighting method using
+MC-only data. The pipeline consists of six sequential stages.
+
+\subsubsection{Automated execution}
+
+\paragraph{Single distortion level.}
+
+\begin{lstlisting}
+cd scripts/closure_test/
+
+# Run with 500k events at 5% distortion
+bash run_closure_test.sh 500000 0.05
+\end{lstlisting}
+
+\paragraph{Full suite (1\%, 3\%, 5\%).}
+
+\begin{lstlisting}
+# Run all three distortion levels
+bash run_closure_suite.sh 500000
+\end{lstlisting}
+
+For full-statistics runs using all $\sim$9.6M events:
+
+\begin{lstlisting}
+bash run_closure_suite.sh -1
+\end{lstlisting}
+
+\subsubsection{Command-line parameters}
+
+\paragraph{\texttt{run\_closure\_test.sh}} accepts three positional
+arguments:
+
+\begin{table}[htbp]
+\centering
+\caption{Parameters for \texttt{run\_closure\_test.sh}.}
+\label{tab:params:closure}
+\begin{tabular}{llll}
+\toprule
+\textbf{Position} & \textbf{Name} & \textbf{Default} &
+  \textbf{Description} \\
+\midrule
+1 & \texttt{N\_EVENTS} & 500000 & Number of events ($-1$ = all) \\
+2 & \texttt{DIST\_LEVEL} & 0.05 & Systematic distortion magnitude \\
+3 & \texttt{NOISE\_SIGMA} & $-1$ & Per-cell noise sigma
+  ($-1$ = auto: $\delta/2$) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{\texttt{run\_closure\_suite.sh}} accepts one positional
+argument:
+
+\begin{table}[htbp]
+\centering
+\caption{Parameters for \texttt{run\_closure\_suite.sh}.}
+\label{tab:params:suite}
+\begin{tabular}{llll}
+\toprule
+\textbf{Position} & \textbf{Name} & \textbf{Default} &
+  \textbf{Description} \\
+\midrule
+1 & \texttt{N\_EVENTS} & 500000 & Events per level ($-1$ = all) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The suite always runs at distortion levels $\delta = 0.01, 0.03, 0.05$.
+
+\subsubsection{Manual step-by-step execution}
+
+Each step can be executed individually for debugging or partial reruns.
+All commands assume the working directory is
+\texttt{scripts/closure\_test/} and use the following variables:
+
+\begin{lstlisting}
+INPUT=../../ntuples/mc23e/mc23e_700770_Zeeg.root
+OUTDIR=../../output/closure_test_5pct
+LEVEL=0.05
+N=500000
+\end{lstlisting}
+
+\paragraph{Step 1 — Create pseudo-data.}
+Applies systematic per-cell distortion with Gaussian noise:
+\begin{lstlisting}
+root -l -b -q \
+  "create_pseudodata.C(\"$INPUT\",\"$OUTDIR/pseudo.root\",$N,$LEVEL)"
+\end{lstlisting}
+
+\paragraph{Step 2 — Derive corrections.}
+Compares MC and pseudo-data cell fractions:
+\begin{lstlisting}
+root -l -b -q \
+  "derive_corrections.C(\"$INPUT\",\"$OUTDIR/pseudo.root\",\
+  \"$OUTDIR/corrections.root\",$N)"
+\end{lstlisting}
+
+\paragraph{Step 3 — Apply Method~1 (flat shift).}
+\begin{lstlisting}
+root -l -b -q \
+  "apply_corrections.C(\"$INPUT\",\"$OUTDIR/corrections.root\",\
+  \"$OUTDIR/reweighted_m1.root\",$N,1)"
+\end{lstlisting}
+
+\paragraph{Step 4 — Apply Method~2 (TProfile).}
+\begin{lstlisting}
+root -l -b -q \
+  "apply_corrections.C(\"$INPUT\",\"$OUTDIR/corrections.root\",\
+  \"$OUTDIR/reweighted_m2.root\",$N,2)"
+\end{lstlisting}
+
+\paragraph{Step 5 — Validate (histograms + $\chi^2$).}
+\begin{lstlisting}
+root -l -b -q \
+  "validate_closure.C(\"$INPUT\",\"$OUTDIR\",\
+  \"$OUTDIR/closure_histos.root\",$N)"
+\end{lstlisting}
+
+\paragraph{Step 6 — Plot.}
+\begin{lstlisting}
+root -l -b -q \
+  "plot_closure.C(\"$OUTDIR/closure_histos.root\",\"$OUTDIR/\")"
+\end{lstlisting}
+
+% ---------- 6.3 Closure test: distortion model -----------------------------
+\subsubsection{Distortion model}
+
+The pseudo-data generation (\texttt{create\_pseudodata.C}) applies the
+following transformation to each cell energy $e_k$:
+\begin{equation}
+  e'_k = e_k \cdot \bigl(1 + \delta \cdot b_k + \mathcal{G}(0,\sigma)\bigr),
+  \label{eq:distortion}
+\end{equation}
+where $\delta$ is the distortion level, $b_k$ is a fixed bias pattern
+based on the Chebyshev distance from the central cell (\cref{tab:bias}),
+and $\mathcal{G}(0,\sigma)$ is per-event per-cell Gaussian noise with
+$\sigma = \delta/2$ by default. After scaling, total cluster energy is
+conserved:
+\begin{equation}
+  e'_k \leftarrow e'_k \cdot \frac{E_\text{tot}}{\sum_j e'_j}.
+\end{equation}
+
+\begin{table}[htbp]
+\centering
+\caption{Bias pattern $b_k$ as a function of Chebyshev distance from
+  the central cell (cell~38).}
+\label{tab:bias}
+\begin{tabular}{lcl}
+\toprule
+\textbf{Distance} & \textbf{$b_k$} & \textbf{Region} \\
+\midrule
+0 & $+1.0$ & Central cell \\
+1 & $+0.4$ & First ring (8 cells) \\
+2 & $-0.4$ & Second ring (16 cells) \\
+$\geq 3$ & $-1.0$ & Outer cells \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This pattern enhances the cluster centre and suppresses the tails,
+producing narrower showers that mimic typical data--MC differences
+observed in the ATLAS electromagnetic calorimeter.
+
+% ---------- 6.4 Closure test: correction methods ----------------------------
+\subsubsection{Correction methods}
+\label{sec:running:methods}
+
+Cell energy fractions are defined as $f_k = e_k / E_\text{tot}$ where
+$E_\text{tot} = \sum_j e_j$.
+
+\paragraph{Method~1 — Flat shift.}
+A single additive correction per cell per $|\eta|$ bin:
+\begin{equation}
+  \Delta_k = \langle f_k^\text{pseudo}\rangle
+            - \langle f_k^\text{MC}\rangle.
+\end{equation}
+Application: $\;f_k^\text{corr} = f_k^\text{MC} + \Delta_k$.
+
+\paragraph{Method~2 — Energy-dependent TProfile correction.}
+A \texttt{TProfile} records the mean correction as a function of the MC
+cell fraction:
+\begin{equation}
+  \alpha_k(f) = \bigl\langle f_k^\text{pseudo} - f_k^\text{MC}
+  \bigr\rangle\Big|_{f_k^\text{MC} = f}.
+\end{equation}
+Application: $\;f_k^\text{corr} = f_k^\text{MC} +
+\alpha_k\!\bigl(f_k^\text{MC}\bigr)$, where $\alpha_k$ is obtained
+via \texttt{TProfile::Interpolate()}.
+
+In both methods, cluster energy is conserved by rescaling:
+\begin{equation}
+  e_k^\text{corr} = \frac{f_k^\text{corr}}{\sum_j f_j^\text{corr}}
+  \cdot E_\text{tot}.
+\end{equation}
+
+% ---------- 6.5 Closure test: quality cuts ----------------------------------
+\subsubsection{Quality cuts}
+\label{sec:running:quality}
+
+Two quality requirements are applied consistently across all pipeline
+stages:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Negative energy clamping}
+    (\texttt{clampCellEnergies()}): Cell energies below zero (from
+    electronic noise subtraction) are set to zero before computing
+    fractions.
+
+  \item \textbf{Central cell dominance}
+    (\texttt{isHealthyCluster()}): The central cell (index~38) must
+    have the highest energy fraction. This rejects mis-centred clusters.
+\end{enumerate}
+
+% ---------- 6.6 Configurable parameters in config.h ------------------------
+\subsubsection{Configuration parameters (\texttt{config.h})}
+\label{sec:running:config}
+
+Key constants defined in \texttt{config.h}:
+
+\begin{table}[htbp]
+\centering
+\caption{Configurable parameters in \texttt{config.h}.}
+\label{tab:config}
+\small
+\begin{tabular}{llp{7cm}}
+\toprule
+\textbf{Constant} & \textbf{Value} & \textbf{Description} \\
+\midrule
+\texttt{kEtaSize}, \texttt{kPhiSize}
+  & 7, 11 & Cluster dimensions ($\eta\times\phi$) \\
+\texttt{kCentralCell} & 38 & Flat index of the central cell \\
+\texttt{kDeltaEta} & 0.025 & Layer-2 cell $\eta$ granularity \\
+\texttt{kNEtaBins} & 14 & Number of $|\eta|$ bins \\
+\texttt{kEtaLimits[15]}
+  & $\{0, 0.2, \ldots, 2.4\}$
+  & $|\eta|$ bin edges \\
+\texttt{kNFracBins} & 12 & TProfile energy-fraction bins \\
+\texttt{kFracBins[13]}
+  & $\{-1, -0.5, \ldots, 0.5, 1\}$
+  & Energy-fraction bin edges \\
+\texttt{kTreeName} & \texttt{"tree"} & TTree name in ntuple files \\
+\texttt{kCellBranch}
+  & \texttt{"photon.7x11ClusterLr2E"}
+  & Cell energy branch name \\
+\texttt{kEtaBranch}
+  & \texttt{"photon\_cluster.eta2"}
+  & Cluster $\eta$ branch name \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ---------- 6.7 Grid submission --------------------------------------------
+\subsection{Grid submission (ntuple production)}
+\label{sec:running:grid}
+
+Ntuples are produced from AOD files using the NTupleMaker framework
+submitted via pathena. A valid grid proxy is required.
+
+\begin{lstlisting}
+# Set up grid tools
+setupATLAS
+asetup Athena,25.0.40
+source NTupleMaker_workspace/build/x86_64-el9-gcc14-opt/setup.sh
+lsetup panda rucio
+voms-proxy-init -voms atlas
+
+# Submit MC23e Z->llgamma jobs
+cd NTupleMaker_workspace/run/
+bash ShowerShapesAnalysis/grid/submit_mc23e_Zllg.sh
+\end{lstlisting}
+
+The grid scripts automatically set the correct output dataset names,
+number of files per job, and analysis type (\texttt{eegamma} or
+\texttt{mumugamma}).
+
+% ============================================================================
+\section{Output}
+\label{sec:output}
+% ============================================================================
+
+All output is written under the \texttt{output/} directory and is
+gitignored.
+
+\subsection{Validation output}
+
+\begin{table}[htbp]
+\centering
+\caption{Output files from the validation workflow.}
+\label{tab:output:validation}
+\small
+\begin{tabular}{lp{8cm}}
+\toprule
+\textbf{File} & \textbf{Contents} \\
+\midrule
+\texttt{output/reta\_Zeeg.root}
+  & TH1F histograms: \texttt{h\_reta\_fudged},
+    \texttt{h\_reta\_unfudged}, \texttt{h\_reta\_computed},
+    difference histograms, and a 2D correlation histogram. \\
+\texttt{output/rphi\_Zeeg.root}
+  & Same structure for $R_\phi$. \\
+\texttt{output/weta2\_Zeeg.root}
+  & Same structure for $w_{\eta\,2}$. \\
+\texttt{output/plots/reta\_Zeeg.pdf}
+  & Single-page PDF: overlay + ratio plot for $R_\eta$. \\
+\texttt{output/plots/rphi\_Zeeg.pdf}
+  & Same for $R_\phi$. \\
+\texttt{output/plots/weta2\_Zeeg.pdf}
+  & Same for $w_{\eta\,2}$. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Identical files are produced for each sample (\texttt{Zeeg},
+\texttt{Zmumug}).
+
+\subsection{Closure test output}
+
+For each distortion level, a directory is created:
+
+\begin{lstlisting}
+output/closure_test_<N>pct/     # N = 1, 3, or 5
+\end{lstlisting}
+
+\begin{table}[htbp]
+\centering
+\caption{Output files per distortion level.}
+\label{tab:output:closure}
+\small
+\begin{tabular}{lp{8cm}}
+\toprule
+\textbf{File} & \textbf{Contents} \\
+\midrule
+\texttt{pseudo.root}
+  & TTree with distorted cell energies (pseudo-data). \\
+\texttt{corrections.root}
+  & Method~1: TH2D per $|\eta|$ bin
+    (\texttt{flatShift\_eta\_X.XX\_X.XX}).
+    Method~2: 77~TProfiles per $|\eta|$ bin
+    (\texttt{CellCorrection\_Cell\_K\_Inc\_Eta\_X.XX\_X.XX}). \\
+\texttt{reweighted\_m1.root}
+  & TTree with Method~1 corrected cell energies. \\
+\texttt{reweighted\_m2.root}
+  & TTree with Method~2 corrected cell energies. \\
+\texttt{closure\_histos.root}
+  & TH1D histograms per $|\eta|$ bin per variable per source
+    (MC, pseudo, M1, M2). Naming:
+    \texttt{h\_<var>\_<source>\_eta<N>}. \\
+\texttt{closure\_reta.pdf}
+  & Multi-page PDF (13~pages): $R_\eta$ closure plots,
+    one page per populated $|\eta|$ bin. \\
+\texttt{closure\_rphi.pdf}
+  & Same for $R_\phi$. \\
+\texttt{closure\_weta2.pdf}
+  & Same for $w_{\eta\,2}$. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Histogram naming convention.}
+Within \texttt{closure\_histos.root}, histograms follow the pattern:
+\begin{lstlisting}
+h_<variable>_<source>_eta<bin>
+\end{lstlisting}
+where \texttt{<variable>} $\in$ \{\texttt{reta}, \texttt{rphi},
+\texttt{weta2}\}, \texttt{<source>} $\in$ \{\texttt{mc},
+\texttt{pseudo}, \texttt{m1}, \texttt{m2}\}, and
+\texttt{<bin>} $\in [0, 13]$.
+
+\paragraph{Plot format.}
+Each closure plot page contains:
+\begin{itemize}[leftmargin=2em]
+  \item \textbf{Upper panel}: Normalised overlay of pseudo-data
+    (black markers), MC (red filled), Method~1 (green dashed),
+    Method~2 (blue solid).
+  \item \textbf{Lower panel}: Ratio to pseudo-data (range 0.8--1.2).
+  \item \textbf{Text labels}: $|\eta|$ bin range, distortion level.
+\end{itemize}
+
+% ============================================================================
+\section{Reproducibility}
+\label{sec:reproducibility}
+% ============================================================================
+
+\subsection{Full reproduction from scratch}
+
+To reproduce the complete set of results, execute the following
+commands in order:
+
+\begin{lstlisting}
+# 1. Set up environment
+setupATLAS
+lsetup "root 6.32.08-x86_64-el9-gcc13-opt"
+
+# 2. Navigate to the repository
+cd /path/to/ShowerShapesAnalysis
+
+# 3. Ensure input ntuple is present
+ls -lh ntuples/mc23e/mc23e_700770_Zeeg.root
+# Expected: ~13 GB, ~9.6M events
+
+# 4. Run validation (all 3 variables, both channels)
+cd scripts
+mkdir -p ../output/plots
+
+python compute_reta.py   -i ../ntuples/mc23e/mc23e_700770_Zeeg.root \
+                          -o ../output/reta_Zeeg.root
+python compute_rphi.py   -i ../ntuples/mc23e/mc23e_700770_Zeeg.root \
+                          -o ../output/rphi_Zeeg.root
+python compute_weta_2.py -i ../ntuples/mc23e/mc23e_700770_Zeeg.root \
+                          -o ../output/weta2_Zeeg.root
+
+python compute_reta.py   -i ../ntuples/mc23e/mc23e_700771_Zmumug.root \
+                          -o ../output/reta_Zmumug.root
+python compute_rphi.py   -i ../ntuples/mc23e/mc23e_700771_Zmumug.root \
+                          -o ../output/rphi_Zmumug.root
+python compute_weta_2.py -i ../ntuples/mc23e/mc23e_700771_Zmumug.root \
+                          -o ../output/weta2_Zmumug.root
+
+root -l -b -q 'plot_reta.C("../output/reta_Zeeg.root",\
+  "../output/plots/reta_Zeeg")'
+root -l -b -q 'plot_rphi.C("../output/rphi_Zeeg.root",\
+  "../output/plots/rphi_Zeeg")'
+root -l -b -q 'plot_weta_2.C("../output/weta2_Zeeg.root",\
+  "../output/plots/weta2_Zeeg")'
+
+root -l -b -q 'plot_reta.C("../output/reta_Zmumug.root",\
+  "../output/plots/reta_Zmumug")'
+root -l -b -q 'plot_rphi.C("../output/rphi_Zmumug.root",\
+  "../output/plots/rphi_Zmumug")'
+root -l -b -q 'plot_weta_2.C("../output/weta2_Zmumug.root",\
+  "../output/plots/weta2_Zmumug")'
+
+# 5. Run closure test suite (all 3 distortion levels)
+cd closure_test
+bash run_closure_suite.sh -1    # -1 = all events (~9.6M)
+\end{lstlisting}
+
+\subsection{Expected runtime}
+
+\begin{table}[htbp]
+\centering
+\caption{Approximate runtime on lxplus (single core).}
+\label{tab:runtime}
+\begin{tabular}{lr}
+\toprule
+\textbf{Task} & \textbf{Time} \\
+\midrule
+Validation (1 variable, 1 sample, 9.6M events) & $\sim$15 min \\
+Validation (all 3 variables, 2 samples) & $\sim$90 min \\
+Closure test (1~level, 9.6M events, all 6 steps) & $\sim$60 min \\
+Closure test suite (3 levels, 9.6M events) & $\sim$3 hours \\
+Closure test (500k events, quick test) & $\sim$5 min \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Random seeds}
+
+The pseudo-data generation uses \texttt{TRandom3} with seed~0 (which
+initialises from the system clock UUID). This means that pseudo-data
+files are \emph{not} bitwise-reproducible across runs by default. To
+obtain deterministic results, modify \texttt{create\_pseudodata.C} to
+use a fixed seed:
+
+\begin{lstlisting}[style=cppstyle]
+TRandom3 rng(42);  // Replace rng(0) with fixed seed
+\end{lstlisting}
+
+The $\chi^2$ closure metrics are stable across random realisations
+because they are averaged over $\sim$7.8M events (after quality cuts).
+
+\subsection{Version control}
+
+The repository tracks only source code and configuration. All input
+data (ntuples), output files (histograms, plots, ROOT files), and
+compiled artifacts are excluded via \texttt{.gitignore}.
+
+Key gitignore rules:
+\begin{lstlisting}
+ntuples/           # Input ntuples (large)
+output/            # All computed outputs
+*.root             # ROOT files in top directory
+__pycache__/       # Python bytecode
+*.log              # Log files
+\end{lstlisting}
+
+\paragraph{Recommended commit workflow.}
+\begin{lstlisting}
+# Check what changed
+git status
+git diff --stat
+
+# Stage and commit with conventional prefix
+git add -A
+git commit -m "feat: add new shower shape variable"
+git push origin main
+\end{lstlisting}
+
+Use conventional commit prefixes: \texttt{feat:} (new feature),
+\texttt{fix:} (bug fix), \texttt{docs:} (documentation),
+\texttt{chore:} (maintenance), \texttt{refactor:} (restructuring).
+
+\end{document}

@@ -65,8 +65,8 @@ void drawVariable(TH1D* hMC, TH1D* hPS, TH1D* hM1, TH1D* hM2,
     hM2->SetLineStyle(1);
 
     // Find maximum
-    double ymax = 1.4 * std::max({hMC->GetMaximum(), hPS->GetMaximum(),
-                                  hM1->GetMaximum(), hM2->GetMaximum()});
+    double ymax = 1.55 * std::max({hMC->GetMaximum(), hPS->GetMaximum(),
+                                   hM1->GetMaximum(), hM2->GetMaximum()});
     hMC->SetMaximum(ymax);
     hMC->SetMinimum(0);
     hMC->GetXaxis()->SetLabelSize(0);
@@ -83,10 +83,10 @@ void drawVariable(TH1D* hMC, TH1D* hPS, TH1D* hM1, TH1D* hM2,
     hPS->Draw("P SAME");
 
     // Legend — top-right inside the pad
-    TLegend* leg = new TLegend(0.55, 0.58, 0.88, 0.78);
+    TLegend* leg = new TLegend(0.56, 0.68, 0.89, 0.89);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
-    leg->SetTextSize(0.040);
+    leg->SetTextSize(0.036);
     leg->AddEntry(hPS, "Pseudo-data", "lp");
     leg->AddEntry(hMC, "Original MC", "l");
     leg->AddEntry(hM1, "Rew. (Shift Only)", "l");

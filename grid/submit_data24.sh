@@ -1,5 +1,4 @@
 #!/bin/bash
-set -euo pipefail
 
 # Submit data24 eegamma NTupleMaker jobs to the grid
 # Run 473235 verified to be in the data24 GRL:
@@ -10,19 +9,23 @@ set -euo pipefail
 
 WORKDIR="/project/atlas/users/mfernand/QT/ShowerShapes/NTupleMaker_workspace"
 
-# --- Environment setup ---
+# --- Environment setup (ATLAS scripts may return non-zero, so no set -e here) ---
 export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
-source "${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh" --quiet
-asetup Athena,25.0.40
+source "${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh" --quiet || true
+asetup Athena,25.0.40 || true
 source "${WORKDIR}/build/x86_64-el9-gcc14-opt/setup.sh" 2>/dev/null \
-  || source "${WORKDIR}/build/x86_64-el9-gcc13-opt/setup.sh"
-lsetup panda rucio
+  || source "${WORKDIR}/build/x86_64-el9-gcc13-opt/setup.sh" 2>/dev/null || true
+export RUCIO_ACCOUNT=femarta
+lsetup panda rucio || true
 
 # Ensure valid grid proxy
 voms-proxy-info --exists 2>/dev/null || voms-proxy-init -voms atlas
 
 # Must submit from the run/ directory inside the workspace
 cd "${WORKDIR}/run"
+
+# From here on, fail on errors
+set -eo pipefail
 
 samples_data24=(
   data24_13p6TeV:data24_13p6TeV.00473235.physics_Main.merge.AOD.r15810_p6304

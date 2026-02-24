@@ -1,0 +1,210 @@
+% ============================================================================
+%  Plot Compendium — Shower Shape Reweighting Studies (MC23e)
+% ============================================================================
+\documentclass[12pt,a4paper]{article}
+
+% --- Packages ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2cm,headheight=15pt]{geometry}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{float}
+\usepackage{fancyhdr}
+
+% --- Page style -------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Plot Compendium — Shower Shape Reweighting}
+\fancyhead[R]{\small ATLAS Internal}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Hyperref setup ---------------------------------------------------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  urlcolor=blue!60!black
+}
+
+% --- Helper command for one closure-test eta-bin row ------------------------
+\newcommand{\closurerow}[3]{%
+  % #1 = distortion dir (e.g. closure_test_5pct)
+  % #2 = page number in the multi-page PDF
+  % #3 = caption text
+  \begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.32\textwidth}
+      \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_reta.pdf}
+      \caption{$R_\eta$}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+      \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_rphi.pdf}
+      \caption{$R_\phi$}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+      \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_weta2.pdf}
+      \caption{$w_{\eta\,2}$}
+    \end{subfigure}
+    \caption{#3}
+  \end{figure}
+}
+
+% --- Title ------------------------------------------------------------------
+\title{%
+  \textbf{Plot Compendium}\\[6pt]
+  \large Photon Shower Shape Cell-Energy Reweighting Studies\\
+  \large MC23e $Z\to ee\gamma$ (DSID 700770)
+}
+\author{ATLAS Simulation}
+\date{\today}
+
+% ============================================================================
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\tableofcontents
+\clearpage
+
+% ============================================================================
+\section{Initial Validation Plots}
+\label{sec:validation}
+% ============================================================================
+
+These plots validate the cell-level recomputation of the three shower shape
+variables ($R_\eta$, $R_\phi$, $w_{\eta\,2}$) against the stored values in
+the ntuples. Each figure shows three normalised distributions:
+\textbf{Unfudged/stored} (blue) — the original MC stored values;
+\textbf{Fudged/stored} (red) — the ``fudged'' stored values; and
+\textbf{Computed from cells} (green, dashed) — values recomputed from the
+$7\times11$ Layer-2 cell energies. The lower panel displays the ratio to the
+Unfudged baseline. Agreement between the blue and green curves confirms
+correct cell-level recomputation.
+
+% ---------- 1.1  Z -> eeg channel ------------------------------------------
+\subsection{$Z\to ee\gamma$ channel}
+\label{sec:validation:zeeg}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[t]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{../output/plots/reta_Zeeg.pdf}
+    \caption{$R_\eta$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{../output/plots/rphi_Zeeg.pdf}
+    \caption{$R_\phi$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{../output/plots/weta2_Zeeg.pdf}
+    \caption{$w_{\eta\,2}$}
+  \end{subfigure}
+  \caption{Shower shape validation for the $Z\to ee\gamma$ channel.
+    Normalised distributions of all three variables comparing stored
+    (Unfudged, Fudged) and cell-recomputed values. The ratio panel confirms
+    that the cell-level recomputation reproduces the stored values.}
+  \label{fig:val:zeeg}
+\end{figure}
+
+% ---------- 1.2  Z -> mumug channel ----------------------------------------
+\subsection{$Z\to\mu\mu\gamma$ channel}
+\label{sec:validation:zmumug}
+
+\begin{figure}[htbp]
+  \centering
+  \begin{subfigure}[t]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{../output/plots/reta_Zmumug.pdf}
+    \caption{$R_\eta$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{../output/plots/rphi_Zmumug.pdf}
+    \caption{$R_\phi$}
+  \end{subfigure}\hfill
+  \begin{subfigure}[t]{0.32\textwidth}
+    \includegraphics[width=\textwidth]{../output/plots/weta2_Zmumug.pdf}
+    \caption{$w_{\eta\,2}$}
+  \end{subfigure}
+  \caption{Shower shape validation for the $Z\to\mu\mu\gamma$ channel.
+    Same format as \cref{fig:val:zeeg}. The $Z\to\mu\mu\gamma$ sample
+    provides an independent cross-check of the cell-level recomputation.}
+  \label{fig:val:zmumug}
+\end{figure}
+
+\clearpage
+% ============================================================================
+\section{Closure Test — 5\% Distortion ($\delta = 0.05$)}
+\label{sec:closure:5pct}
+% ============================================================================
+
+Closure test results with a 5\% uniform distortion applied to all Layer-2 cell
+energies. Each figure shows one $|\eta|$ bin with all three shower shape
+variables side by side. Upper panels: normalised distributions of pseudo-data,
+uncorrected MC, Method~1 (flat shift), and Method~2 (TProfile). Lower panels:
+ratio to pseudo-data.
+
+\closurerow{closure_test_5pct}{1}{$|\eta|\in[0.00,\,0.20)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{2}{$|\eta|\in[0.20,\,0.40)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{3}{$|\eta|\in[0.40,\,0.60)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{4}{$|\eta|\in[0.60,\,0.80)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{5}{$|\eta|\in[0.80,\,1.00)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{6}{$|\eta|\in[1.00,\,1.20)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{7}{$|\eta|\in[1.20,\,1.30)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{8}{$|\eta|\in[1.30,\,1.37)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{9}{$|\eta|\in[1.52,\,1.60)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{10}{$|\eta|\in[1.60,\,1.80)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{11}{$|\eta|\in[1.80,\,2.00)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{12}{$|\eta|\in[2.00,\,2.20)$, $\delta=0.05$.}
+\closurerow{closure_test_5pct}{13}{$|\eta|\in[2.20,\,2.40)$, $\delta=0.05$.}
+
+\clearpage
+% ============================================================================
+\section{Closure Test — 3\% Distortion ($\delta = 0.03$)}
+\label{sec:closure:3pct}
+% ============================================================================
+
+Closure test results with a 3\% uniform distortion. Same format as
+\cref{sec:closure:5pct}.
+
+\closurerow{closure_test_3pct}{1}{$|\eta|\in[0.00,\,0.20)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{2}{$|\eta|\in[0.20,\,0.40)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{3}{$|\eta|\in[0.40,\,0.60)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{4}{$|\eta|\in[0.60,\,0.80)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{5}{$|\eta|\in[0.80,\,1.00)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{6}{$|\eta|\in[1.00,\,1.20)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{7}{$|\eta|\in[1.20,\,1.30)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{8}{$|\eta|\in[1.30,\,1.37)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{9}{$|\eta|\in[1.52,\,1.60)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{10}{$|\eta|\in[1.60,\,1.80)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{11}{$|\eta|\in[1.80,\,2.00)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{12}{$|\eta|\in[2.00,\,2.20)$, $\delta=0.03$.}
+\closurerow{closure_test_3pct}{13}{$|\eta|\in[2.20,\,2.40)$, $\delta=0.03$.}
+
+\clearpage
+% ============================================================================
+\section{Closure Test — 1\% Distortion ($\delta = 0.01$)}
+\label{sec:closure:1pct}
+% ============================================================================
+
+Closure test results with a 1\% uniform distortion. Same format as
+\cref{sec:closure:5pct}.
+
+\closurerow{closure_test_1pct}{1}{$|\eta|\in[0.00,\,0.20)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{2}{$|\eta|\in[0.20,\,0.40)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{3}{$|\eta|\in[0.40,\,0.60)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{4}{$|\eta|\in[0.60,\,0.80)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{5}{$|\eta|\in[0.80,\,1.00)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{6}{$|\eta|\in[1.00,\,1.20)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{7}{$|\eta|\in[1.20,\,1.30)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{8}{$|\eta|\in[1.30,\,1.37)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{9}{$|\eta|\in[1.52,\,1.60)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{10}{$|\eta|\in[1.60,\,1.80)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{11}{$|\eta|\in[1.80,\,2.00)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{12}{$|\eta|\in[2.00,\,2.20)$, $\delta=0.01$.}
+\closurerow{closure_test_1pct}{13}{$|\eta|\in[2.20,\,2.40)$, $\delta=0.01$.}
+
+\end{document}
