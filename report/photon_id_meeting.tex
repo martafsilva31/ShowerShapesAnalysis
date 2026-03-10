@@ -81,93 +81,128 @@
 \section{Motivation \& Context}
 % ============================================================================
 
-% --- Slide 3: Motivation ----------------------------------------------------
-\begin{frame}{Motivation}
+% --- Slide 3: Photon ID & Shower Shapes ------------------------------------
+\begin{frame}{Photon Identification \& Shower Shapes}
 
 \begin{columns}[T]
 \begin{column}{0.55\textwidth}
-  \textbf{Photon identification} in ATLAS relies on shower shape
-  variables in the electromagnetic calorimeter
-  \vspace{6pt}
-
-  \textbf{Current approach — fudge factors:}
+  \textbf{Photon identification in ATLAS} uses a cut-based approach
+  on calorimeter and tracking variables:
   \begin{itemize}
-    \item Correct each shower shape variable \emph{independently}
-    \item Per-variable scale/shift derived from data--MC comparison
-    \item Does \textbf{not} preserve inter-variable correlations
+    \item \textbf{Loose} and \textbf{Tight} working points defined by
+          rectangular cuts on \emph{shower shape variables}
+    \item Shower shapes characterise the \textbf{lateral and longitudinal
+          energy profile} of the electromagnetic shower
+    \item Key discriminants in the \textbf{second EM sampling layer}
+          (Layer~2): $R_\eta$, $R_\phi$, $w_{\eta\,2}$
+    \item Also used: Layer~1 strip variables ($w_{s\,3}$, $w_{s\,\text{tot}}$,
+          $F_\text{side}$, $\Delta E$, $E_\text{ratio}$), hadronic leakage
   \end{itemize}
-  \vspace{6pt}
-
-  \textbf{Cell-level approach} (ATL-COM-PHYS-2021-640):
-  \begin{itemize}
-    \item Correct individual \textbf{cell energies} in EM Layer~2
-    \item All shower shapes recomputed from corrected cells
-    \item Correlations preserved \emph{by construction}
-    \item Also benefits downstream ML-based ID (CNN/GNN)
-  \end{itemize}
+  \vspace{4pt}
+  Accurate modelling of shower shapes in MC is \textbf{essential} for
+  measuring photon ID efficiency via data-driven methods (e.g.\ tag-and-probe
+  with $Z\to\ell\ell\gamma$).
 \end{column}
 \begin{column}{0.42\textwidth}
   % Placeholder for calorimeter diagram from Francisco's report
   % Uncomment and adjust path after extracting figure:
   % \includegraphics[width=\textwidth]{fig_calorimeter.pdf}
   \begin{center}
-  \begin{tikzpicture}[scale=0.45]
+  \begin{tikzpicture}[scale=0.42]
     % Simplified EM calorimeter layer schematic
-    \fill[atlasblue!15] (0,0) rectangle (7,3);
-    \node[font=\footnotesize] at (3.5,2.5) {Layer 1 (strips)};
-    \fill[atlasblue!30] (0,-3.5) rectangle (7,-0.3);
-    \node[font=\footnotesize\bfseries] at (3.5,-0.7) {Layer 2 (main sampling)};
-    \node[font=\scriptsize] at (3.5,-1.5) {$7\times11$ cell cluster};
-    \node[font=\scriptsize] at (3.5,-2.3) {$\Delta\eta \times \Delta\phi = 0.025 \times 0.025$};
-    \fill[atlasblue!10] (0,-5.5) rectangle (7,-3.8);
-    \node[font=\footnotesize] at (3.5,-4.3) {Layer 3};
+    \fill[atlasblue!8] (0,3.5) rectangle (7,5.5);
+    \node[font=\footnotesize] at (3.5,5.0) {Presampler};
+    \fill[atlasblue!15] (0,0.2) rectangle (7,3.3);
+    \node[font=\footnotesize] at (3.5,2.7) {Layer 1 (strips)};
+    \node[font=\scriptsize] at (3.5,1.7) {$\Delta\eta\!\times\!\Delta\phi = 0.003\!\times\!0.1$};
+    \fill[atlasblue!30] (0,-3.5) rectangle (7,-0.1);
+    \node[font=\footnotesize\bfseries] at (3.5,-0.5) {Layer 2};
+    \node[font=\scriptsize] at (3.5,-1.4) {$\Delta\eta\!\times\!\Delta\phi = 0.025\!\times\!0.025$};
+    \node[font=\scriptsize] at (3.5,-2.3) {Most of shower energy};
+    \fill[atlasblue!12] (0,-5.5) rectangle (7,-3.8);
+    \node[font=\footnotesize] at (3.5,-4.2) {Layer 3};
+    \node[font=\scriptsize] at (3.5,-5.0) {$\Delta\eta\!\times\!\Delta\phi = 0.05\!\times\!0.025$};
     % arrow
-    \draw[->,thick,red!70!black] (-0.8,3.5) -- (-0.8,-5.5)
-      node[midway,left,font=\scriptsize,align=center] {photon\\shower};
+    \draw[->,thick,red!70!black] (-0.8,6.0) -- (-0.8,-5.5)
+      node[midway,left,font=\scriptsize,align=center] {$\gamma$ / $e$\\shower};
     % braces
     \draw[decorate,decoration={brace,mirror,amplitude=5pt}]
-      (7.3,-3.5) -- (7.3,-0.3) node[midway,right=6pt,font=\scriptsize] {This work};
+      (7.3,-3.5) -- (7.3,-0.1)
+      node[midway,right=6pt,font=\scriptsize,align=left] {$R_\eta$, $R_\phi$,\\$w_{\eta\,2}$};
   \end{tikzpicture}
   \end{center}
 \end{column}
 \end{columns}
 \end{frame}
 
-% --- Slide 4: Project Overview ----------------------------------------------
-\begin{frame}{Project Overview}
-
-\begin{block}{Qualification Task}
-Investigate the modelling of electromagnetic showers in the calorimeter
-at the \textbf{cell level}, and prototype a cell-level correction procedure
-to address data-to-simulation differences in shower shapes crucial for
-photon (and electron) identification — as an alternative to fudge factors.
-\end{block}
-\vspace{6pt}
+% --- Slide 4: Fudge Factors & Motivation -----------------------------------
+\begin{frame}{Current Corrections \& Motivation for Cell-Level Approach}
 
 \begin{columns}[T]
 \begin{column}{0.48\textwidth}
-  \textbf{Monte Carlo sample}
+  \textbf{Current approach: fudge factors}
   \begin{itemize}
-    \item MC23e $Z\to ee\gamma$ (DSID~700770)
-    \item $\sim$9.6\,M events ($\sim$7.8\,M pass quality cuts)
-    \item Run~3 simulation campaign
+    \item Data--MC differences in shower shapes corrected by
+          per-variable \textbf{shifts and smearings}
+    \item Derived from $Z\to ee$ control samples, applied to MC
+    \item Each variable corrected \emph{independently}
+  \end{itemize}
+  \vspace{4pt}
+  \textbf{Limitations:}
+  \begin{itemize}
+    \item Does \textbf{not} preserve correlations between variables
+    \item Corrections derived at distribution level, not event level
+    \item Not suitable for ML-based ID (CNN/GNN) that uses
+          cell-level inputs directly
+    \item Must be re-derived for every new variable
   \end{itemize}
 \end{column}
 \begin{column}{0.48\textwidth}
-  \textbf{Cell information}
+  \textbf{Cell-level approach:}
   \begin{itemize}
-    \item EM Layer~2: $7\,(\eta)\times 11\,(\phi)$ cluster
-    \item 77 cell energies per photon (MeV)
-    \item Cluster barycentre $\eta_2$ for $|\eta|$ binning
-    \item Produced with NTupleMaker (Athena 25.0.40)
+    \item Correct individual \textbf{cell energies} in the EM
+          calorimeter cluster
+    \item Recompute \emph{all} shower shapes from corrected cells
+    \item Inter-variable correlations preserved
+          \textbf{by construction}
+    \item Any new variable automatically benefits
+    \item Enables consistent input for both cut-based and ML-based ID
   \end{itemize}
+  \vspace{4pt}
+  \textbf{Pioneered for Run~2} in ATL-COM-PHYS-2021-640\\
+  (F.~Caetano et al.) — applied to Layer~2 cells using
+  $Z\to\ell\ell\gamma$ matched data--MC ntuples.
 \end{column}
 \end{columns}
-\vspace{8pt}
+\end{frame}
 
-\centering
-{\small 14~$|\eta|$ bins from 0 to 2.4, excluding crack region
-$1.37 < |\eta| < 1.52$}      
+% --- Slide 5: Project Goal -------------------------------------------------
+\begin{frame}{Project Goal}
+
+\begin{block}{Objective}
+Continue and extend the cell-level shower shape correction studies
+for \textbf{Run~3 conditions} (MC23), building on the Run~2 method
+developed in ATL-COM-PHYS-2021-640.
+\end{block}
+\vspace{6pt}
+
+\textbf{Previous work} (Run~2, F.~Caetano et al.):
+\begin{itemize}
+  \item Cell-energy reweighting applied to \textbf{Layer~2} of the EM calorimeter
+  \item Used matched data--MC event pairs from $Z\to\ell\ell\gamma$
+  \item Two correction methods studied: flat shift and energy-dependent (TProfile)
+  \item Demonstrated improved data--MC agreement for $R_\eta$, $R_\phi$,
+        $w_{\eta\,2}$
+\end{itemize}
+\vspace{6pt}
+
+\textbf{This work — scope:}
+\begin{enumerate}
+  \item \textbf{Validate} the method with Run~3 MC (MC23e) via closure tests
+  \item \textbf{Apply} corrections to real Run~3 data using DAOD\_EGAM3 ntuples
+  \item \textbf{Extend} the approach to \textbf{Layers~1 and~3} of the EM calorimeter
+        (strip and back layers)
+\end{enumerate}
 \end{frame}
 
 % ============================================================================
@@ -355,8 +390,58 @@ $1.37 < |\eta| < 1.52$}
 \section{Closure Test}
 % ============================================================================
 
-% --- Slide 8: Closure Test Design -------------------------------------------
-\begin{frame}{Closure Test Design}
+% --- Slide 9: Closure Test Setup -------------------------------------------
+\begin{frame}{Closure Test: Setup \& Inputs}
+
+\textbf{Goal}: validate the correction procedure in a controlled environment
+where the ``truth'' is known by construction.
+
+\vspace{4pt}
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+  \textbf{Monte Carlo sample}
+  \begin{itemize}
+    \item MC23e $Z\to ee\gamma$, DSID~700770
+    \item Sherpa~2.2.14, Run~3 simulation
+    \item $\sim$9.6\,M events total
+    \item $\sim$7.8\,M pass quality selection (81\%)
+  \end{itemize}
+  \vspace{4pt}
+  \textbf{Ntuple production}
+  \begin{itemize}
+    \item NTupleMaker package (Athena 25.0.40)
+    \item Layer~2 cell energies stored as vector of
+          77 doubles ($7\!\times\!11$ cluster)
+    \item Cluster barycentre $\eta_2$ for binning
+  \end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+  \textbf{$|\eta|$ binning} — 14~bins, standard ATLAS
+  EM calorimeter segmentation:
+  {\small
+  \[
+    [0,0.2),\; [0.2,0.4),\; \ldots\; [1.3,1.37)
+  \]
+  \[
+    [1.52,1.6),\; \ldots\; [2.2,2.4)
+  \]
+  }
+  Crack region $1.37 < |\eta| < 1.52$ excluded.
+  \vspace{4pt}
+
+  \textbf{Quality selection}
+  \begin{itemize}
+    \item \textbf{Central cell dominance}: cell~$(3,5)$ must
+          carry highest energy fraction
+    \item \textbf{Negative energy clamping}: cells with $e_k < 0$
+          (noise) set to zero
+  \end{itemize}
+\end{column}
+\end{columns}
+\end{frame}
+
+% --- Slide 10: Closure Test Design ------------------------------------------
+\begin{frame}{Closure Test: Distortion Model}
 
 \textbf{Goal}: validate the correction in a controlled environment where the
 ``truth'' is known by construction.
@@ -528,40 +613,6 @@ $|\eta|\in[0.00,\,0.20)$ — comparing 1\%, 3\%, and 5\% distortion levels
 }
 \end{frame}
 
-% --- Slide 12: Forward Endcap ----------------------------------------------
-\begin{frame}{Closure Results: Forward Endcap ($\delta = 5\%$)}
-
-$|\eta|\in[2.20,\,2.40)$ — demonstrates method works at high pseudorapidity
-
-\vspace{4pt}
-\begin{columns}[c]
-\begin{column}{0.32\textwidth}
-  \centering
-  \includegraphics[page=13,width=\textwidth]{closure_reta.pdf}\\
-  {\small $R_\eta$}
-\end{column}
-\begin{column}{0.32\textwidth}
-  \centering
-  \includegraphics[page=13,width=\textwidth]{closure_rphi.pdf}\\
-  {\small $R_\phi$}
-\end{column}
-\begin{column}{0.32\textwidth}
-  \centering
-  \includegraphics[page=13,width=\textwidth]{closure_weta2.pdf}\\
-  {\small $w_{\eta\,2}$}
-\end{column}
-\end{columns}
-
-\vspace{6pt}
-\centering
-{\small
-  Uncorrected $\chi^2/n_\text{df}$ is larger at forward $|\eta|$
-  (different detector geometry),\\
-  but Method~2 still achieves $\sim$20$\times$ reduction.\\[2pt]
-  \textbf{Correction is uniform across the full $|\eta|$ range.}
-}
-\end{frame}
-
 % --- Slide 13: Chi2 Summary ------------------------------------------------
 \begin{frame}{$\chi^2/n_\text{df}$ Summary ($\delta = 5\%$)}
 
@@ -611,11 +662,54 @@ $[2.2,\,2.4)$   & 0.0192 & 0.0035 & \textbf{0.0010} & 0.0118 & 0.0034 & \textbf{
 \end{frame}
 
 % ============================================================================
-\section{Adaptations \& Next Steps}
+\section{Conclusions \& Next Steps}
 % ============================================================================
 
-% --- Slide 14: Key Adaptations ---------------------------------------------
-\begin{frame}{Key Adaptations from Reference Method}
+% --- Slide 15: Conclusions & Next Steps ------------------------------------
+\begin{frame}{Conclusions \& Next Steps}
+
+\textbf{Conclusions:}
+\begin{itemize}
+  \item Cell-energy reweighting method successfully \textbf{validated} for
+        Run~3 MC (MC23e) via closure tests
+  \item Tested at 3~distortion levels (1\%, 3\%, 5\%) across
+        13~populated $|\eta|$ bins
+  \item \textbf{Method~2} (energy-dependent TProfile) achieves
+        \textbf{90--95\%} $\chi^2/n_\text{df}$ reduction —
+        consistently outperforms flat shift (Method~1: 50--80\%)
+  \item Correction is \textbf{uniform} across all $|\eta|$ bins and all
+        3 shower shape variables ($R_\eta$, $R_\phi$, $w_{\eta\,2}$)
+\end{itemize}
+
+\vspace{6pt}
+\textbf{Next steps:}
+\begin{enumerate}
+  \item \textbf{Data--MC comparison} — apply corrections to real Run~3 data
+    \begin{itemize}
+      \item DAOD\_EGAM3 ntuples produced
+            (data24 run~473235 + MC23e DSID~700770)
+      \item Analysis pipeline implemented, pending execution
+    \end{itemize}
+  \item \textbf{Conversion-type binning}
+        (derive separate corrections for unconverted / converted photons)
+  \item \textbf{Extend to Layers~1 and~3}
+        (requires new NTupleMaker branches for L1/L3 cell energies)
+  \item Study impact on \textbf{photon ID efficiency} (tight working point)
+\end{enumerate}
+\end{frame}
+
+% ============================================================================
+% BACKUP SLIDES
+% ============================================================================
+\appendix
+\begin{frame}[noframenumbering]
+  \centering
+  \Huge\bfseries\color{atlasblue}
+  Backup
+\end{frame}
+
+% --- Backup: Key Adaptations from Reference --------------------------------
+\begin{frame}[noframenumbering]{Key Adaptations from Reference Method}
 
 \small
 Differences from ATL-COM-PHYS-2021-640 (Run~2 implementation):
@@ -645,46 +739,37 @@ Precision        & \texttt{float}             & \texttt{double} \\
 \end{itemize}
 \end{frame}
 
-% --- Slide 15: Status & Next Steps -----------------------------------------
-\begin{frame}{Status \& Next Steps}
+% --- Backup: Forward Endcap ------------------------------------------------
+\begin{frame}[noframenumbering]{Closure Results: Forward Endcap ($\delta = 5\%$)}
 
-\textbf{Completed:}
-\begin{itemize}
-  \item[\checkmark] Cell-energy reweighting method implemented for MC23e
-  \item[\checkmark] Closure test validated at 3 distortion levels
-        (1\%, 3\%, 5\%)
-  \item[\checkmark] Method~2 (TProfile) achieves 90--95\% $\chi^2$ reduction
-  \item[\checkmark] Robust across all 13 populated $|\eta|$ bins and all 3
-        shower shape variables
-\end{itemize}
+$|\eta|\in[2.20,\,2.40)$ — demonstrates method works at high pseudorapidity
+
+\vspace{4pt}
+\begin{columns}[c]
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=13,width=\textwidth]{closure_reta.pdf}\\
+  {\small $R_\eta$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=13,width=\textwidth]{closure_rphi.pdf}\\
+  {\small $R_\phi$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=13,width=\textwidth]{closure_weta2.pdf}\\
+  {\small $w_{\eta\,2}$}
+\end{column}
+\end{columns}
 
 \vspace{6pt}
-\textbf{Next steps:}
-\begin{enumerate}
-  \item \textbf{Data--MC comparison} with real data
-    \begin{itemize}
-      \item DAOD\_EGAM3 ntuples ready
-            (data24 run~473235 + MC23e DSID~700770)
-      \item Analysis pipeline implemented, pending execution
-    \end{itemize}
-  \item \textbf{Conversion-type binning}
-        (unconverted / converted separately)
-  \item \textbf{Extend to Layers~1 and~3}
-    \begin{itemize}
-      \item Requires new NTupleMaker branches for L1/L3 cell energies
-    \end{itemize}
-  \item Study impact on \textbf{photon ID efficiency} (tight ID working point)
-\end{enumerate}
-\end{frame}
-
-% ============================================================================
-% BACKUP SLIDES
-% ============================================================================
-\appendix
-\begin{frame}[noframenumbering]
-  \centering
-  \Huge\bfseries\color{atlasblue}
-  Backup
+\centering
+{\small
+  Uncorrected $\chi^2/n_\text{df}$ is larger at forward $|\eta|$
+  (different detector geometry),\\
+  but Method~2 still achieves $\sim$20$\times$ reduction.
+}
 \end{frame}
 
 % --- Backup: Full chi2 table 5% --------------------------------------------
