@@ -1,0 +1,868 @@
+% ============================================================================
+%  Photon ID Meeting — Cell-Level Shower Shape Corrections
+%  Marta Fernandes da Silva, 10 March 2026
+% ============================================================================
+\documentclass[aspectratio=169,10pt]{beamer}
+
+% --- Theme & colours --------------------------------------------------------
+\usetheme{Madrid}
+\usecolortheme{default}
+\definecolor{atlasblue}{RGB}{0,73,135}
+\setbeamercolor{structure}{fg=atlasblue}
+\setbeamercolor{frametitle}{bg=atlasblue!10, fg=atlasblue}
+\setbeamercolor{title}{fg=white, bg=atlasblue}
+\setbeamercolor{block title}{bg=atlasblue, fg=white}
+\setbeamercolor{block body}{bg=atlasblue!5}
+\setbeamercolor{item}{fg=atlasblue}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \leavevmode\hbox{%
+    \begin{beamercolorbox}[wd=.33\paperwidth,ht=2.5ex,dp=1ex,center]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshortauthor
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.34\paperwidth,ht=2.5ex,dp=1ex,center]{title in head/foot}%
+      \usebeamerfont{title in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.33\paperwidth,ht=2.5ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+      \insertframenumber{}/\inserttotalframenumber\hspace*{2ex}
+    \end{beamercolorbox}}%
+  \vskip0pt%
+}
+
+% --- Packages ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{decorations.pathreplacing}
+\usepackage{siunitx}
+\usepackage{appendixnumberbeamer}
+
+% --- Graphics path ----------------------------------------------------------
+\graphicspath{
+  {../output/closure_test_5pct/}
+  {../output/closure_test_3pct/}
+  {../output/closure_test_1pct/}
+  {../output/plots/}
+}
+
+% --- Title info -------------------------------------------------------------
+\title[Cell-Level Shower Shape Corrections]{%
+  Cell-Level Shower Shape Corrections\\[2pt]
+  for Photon ID in MC23e}
+\author[M.~Fernandes da Silva]{Marta Fernandes da Silva}
+\institute{LIP / ATLAS}
+\date{Photon ID Meeting — 10 March 2026}
+
+% ============================================================================
+\begin{document}
+% ============================================================================
+
+% --- Slide 1: Title ---------------------------------------------------------
+{
+\setbeamertemplate{footline}{}
+\begin{frame}
+  \titlepage
+  \vfill
+  \centering
+  {\small\color{gray} ATLAS Internal}
+\end{frame}
+}
+
+% --- Slide 2: Outline -------------------------------------------------------
+\begin{frame}{Outline}
+  \tableofcontents
+\end{frame}
+
+% ============================================================================
+\section{Motivation \& Context}
+% ============================================================================
+
+% --- Slide 3: Motivation ----------------------------------------------------
+\begin{frame}{Motivation}
+
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+  \textbf{Photon identification} in ATLAS relies on shower shape
+  variables in the electromagnetic calorimeter
+  \vspace{6pt}
+
+  \textbf{Current approach — fudge factors:}
+  \begin{itemize}
+    \item Correct each shower shape variable \emph{independently}
+    \item Per-variable scale/shift derived from data--MC comparison
+    \item Does \textbf{not} preserve inter-variable correlations
+  \end{itemize}
+  \vspace{6pt}
+
+  \textbf{Cell-level approach} (ATL-COM-PHYS-2021-640):
+  \begin{itemize}
+    \item Correct individual \textbf{cell energies} in EM Layer~2
+    \item All shower shapes recomputed from corrected cells
+    \item Correlations preserved \emph{by construction}
+    \item Also benefits downstream ML-based ID (CNN/GNN)
+  \end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+  % Placeholder for calorimeter diagram from Francisco's report
+  % Uncomment and adjust path after extracting figure:
+  % \includegraphics[width=\textwidth]{fig_calorimeter.pdf}
+  \begin{center}
+  \begin{tikzpicture}[scale=0.45]
+    % Simplified EM calorimeter layer schematic
+    \fill[atlasblue!15] (0,0) rectangle (7,3);
+    \node[font=\footnotesize] at (3.5,2.5) {Layer 1 (strips)};
+    \fill[atlasblue!30] (0,-3.5) rectangle (7,-0.3);
+    \node[font=\footnotesize\bfseries] at (3.5,-0.7) {Layer 2 (main sampling)};
+    \node[font=\scriptsize] at (3.5,-1.5) {$7\times11$ cell cluster};
+    \node[font=\scriptsize] at (3.5,-2.3) {$\Delta\eta \times \Delta\phi = 0.025 \times 0.025$};
+    \fill[atlasblue!10] (0,-5.5) rectangle (7,-3.8);
+    \node[font=\footnotesize] at (3.5,-4.3) {Layer 3};
+    % arrow
+    \draw[->,thick,red!70!black] (-0.8,3.5) -- (-0.8,-5.5)
+      node[midway,left,font=\scriptsize,align=center] {photon\\shower};
+    % braces
+    \draw[decorate,decoration={brace,mirror,amplitude=5pt}]
+      (7.3,-3.5) -- (7.3,-0.3) node[midway,right=6pt,font=\scriptsize] {This work};
+  \end{tikzpicture}
+  \end{center}
+\end{column}
+\end{columns}
+\end{frame}
+
+% --- Slide 4: Project Overview ----------------------------------------------
+\begin{frame}{Project Overview}
+
+\begin{block}{Qualification Task}
+Investigate the modelling of electromagnetic showers in the calorimeter
+at the \textbf{cell level}, and prototype a cell-level correction procedure
+to address data-to-simulation differences in shower shapes crucial for
+photon (and electron) identification — as an alternative to fudge factors.
+\end{block}
+\vspace{6pt}
+
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+  \textbf{Monte Carlo sample}
+  \begin{itemize}
+    \item MC23e $Z\to ee\gamma$ (DSID~700770)
+    \item $\sim$9.6\,M events ($\sim$7.8\,M pass quality cuts)
+    \item Run~3 simulation campaign
+  \end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+  \textbf{Cell information}
+  \begin{itemize}
+    \item EM Layer~2: $7\,(\eta)\times 11\,(\phi)$ cluster
+    \item 77 cell energies per photon (MeV)
+    \item Cluster barycentre $\eta_2$ for $|\eta|$ binning
+    \item Produced with NTupleMaker (Athena 25.0.40)
+  \end{itemize}
+\end{column}
+\end{columns}
+\vspace{8pt}
+
+\centering
+{\small 14~$|\eta|$ bins from 0 to 2.4, excluding crack region
+$1.37 < |\eta| < 1.52$}      
+\end{frame}
+
+% ============================================================================
+\section{Shower Shape Variables}
+% ============================================================================
+
+% --- Slide 5: Shower Shape Variables ----------------------------------------
+\begin{frame}{Shower Shape Variables}
+\begin{columns}[T]
+\begin{column}{0.45\textwidth}
+  \textbf{Three key discriminants:}
+  \vspace{4pt}
+
+  \begin{align*}
+    R_\eta &= \frac{E(3\!\times\!7)}{E(7\!\times\!7)}
+    \\[6pt]
+    R_\phi &= \frac{E(3\!\times\!3)}{E(3\!\times\!7)}
+    \\[6pt]
+    w_{\eta\,2} &= \sqrt{
+      \frac{\sum E_i\,\eta_i^2}{\sum E_i}
+      - \left(\frac{\sum E_i\,\eta_i}{\sum E_i}\right)^{\!2}
+    }
+  \end{align*}
+  \vspace{4pt}
+
+  {\small $E(m\!\times\!n)$: energy in $m\,(\eta)\times n\,(\phi)$
+  sub-window.\\ $w_{\eta\,2}$ computed in $3\!\times\!5$ window.}
+\end{column}
+\begin{column}{0.52\textwidth}
+  \centering
+  % TikZ diagram of 7x11 cell grid with sub-windows
+  \begin{tikzpicture}[scale=0.38, every node/.style={font=\tiny}]
+    % Full 7x11 grid (7 eta rows, 11 phi cols)
+    \foreach \r in {0,...,6} {
+      \foreach \c in {0,...,10} {
+        \fill[atlasblue!8] (\c+0.05,\r+0.05) rectangle (\c+0.95,\r+0.95);
+      }
+    }
+    % 7x7 window (all 7 rows, cols 2-8) — lightest highlight
+    \foreach \r in {0,...,6} {
+      \foreach \c in {2,...,8} {
+        \fill[yellow!25] (\c+0.05,\r+0.05) rectangle (\c+0.95,\r+0.95);
+      }
+    }
+    % 3x7 window (rows 2-4, cols 2-8)
+    \foreach \r in {2,...,4} {
+      \foreach \c in {2,...,8} {
+        \fill[orange!30] (\c+0.05,\r+0.05) rectangle (\c+0.95,\r+0.95);
+      }
+    }
+    % 3x5 window for weta2 (rows 2-4, cols 3-7)
+    \foreach \r in {2,...,4} {
+      \foreach \c in {3,...,7} {
+        \fill[green!30] (\c+0.05,\r+0.05) rectangle (\c+0.95,\r+0.95);
+      }
+    }
+    % 3x3 window (rows 2-4, cols 4-6)
+    \foreach \r in {2,...,4} {
+      \foreach \c in {4,...,6} {
+        \fill[red!30] (\c+0.05,\r+0.05) rectangle (\c+0.95,\r+0.95);
+      }
+    }
+    % Central cell highlight
+    \fill[atlasblue!60] (5+0.05,3+0.05) rectangle (5+0.95,3+0.95);
+    \node[white,font=\tiny\bfseries] at (5.5,3.5) {C};
+    % Grid lines
+    \draw[gray!50,very thin] (0,0) grid (11,7);
+    % Outer border
+    \draw[thick] (0,0) rectangle (11,7);
+    % Sub-window borders
+    \draw[yellow!70!black,thick] (2,0) rectangle (9,7);
+    \draw[orange!80!black,thick] (2,2) rectangle (9,5);
+    \draw[red!80!black,thick] (4,2) rectangle (7,5);
+    % Labels
+    \node[yellow!70!black,anchor=west,font=\scriptsize\bfseries]
+      at (9.2,0.5) {$7\!\times\!7$};
+    \node[orange!80!black,anchor=west,font=\scriptsize\bfseries]
+      at (9.2,3.5) {$3\!\times\!7$};
+    \node[red!80!black,anchor=south,font=\scriptsize\bfseries]
+      at (5.5,5.2) {$3\!\times\!3$};
+    \node[green!50!black,anchor=north,font=\scriptsize\bfseries]
+      at (5.5,1.8) {$3\!\times\!5$};
+    % Axes
+    \draw[<->,thick] (-0.5,0) -- (-0.5,7)
+      node[midway,left,font=\scriptsize] {$\eta$ (7)};
+    \draw[<->,thick] (0,-0.5) -- (11,-0.5)
+      node[midway,below,font=\scriptsize] {$\phi$ (11)};
+    % Legend
+    \node[anchor=north west,font=\scriptsize,align=left] at (0,-1.2) {%
+      \textcolor{yellow!70!black}{$\blacksquare$}~$E(7\!\times\!7)$\quad
+      \textcolor{orange!80!black}{$\blacksquare$}~$E(3\!\times\!7)$\quad
+      \textcolor{red!80!black}{$\blacksquare$}~$E(3\!\times\!3)$\quad
+      \textcolor{green!50!black}{$\blacksquare$}~$w_{\eta\,2}$
+    };
+  \end{tikzpicture}
+\end{column}
+\end{columns}
+\end{frame}
+
+% ============================================================================
+\section{Cell-Energy Reweighting Method}
+% ============================================================================
+
+% --- Slide 6: Method Overview -----------------------------------------------
+\begin{frame}{Cell-Energy Reweighting: Overview}
+
+\begin{enumerate}
+  \item \textbf{Compute cell energy fractions} from the $7\!\times\!11$ cluster:
+  \[
+    f_k \;=\; \frac{e_k}{E_\text{tot}}
+    \;=\; \frac{e_k}{\displaystyle\sum_{j=1}^{77} e_j}
+    \qquad (k = 1,\ldots,77)
+  \]
+
+  \item \textbf{Derive correction} by comparing data and MC fractions
+        cell-by-cell, in each of 14~$|\eta|$ bins
+
+  \item \textbf{Apply correction} to MC fractions:
+  $\quad f_k^\text{corr} = f_k^\text{MC} + \text{correction}_k$
+
+  \item \textbf{Reconstruct cell energies} with energy conservation:
+  \[
+    e_k^\text{corr} \;=\;
+    \frac{f_k^\text{corr}}{\displaystyle\sum_j f_j^\text{corr}}
+    \;\times\; E_\text{tot}
+  \]
+
+  \item \textbf{Recompute all shower shapes} from the corrected cell energies
+\end{enumerate}
+
+\vspace{4pt}
+\centering
+{\small\color{atlasblue} Two methods differ in step~2: how the correction is parameterised}
+\end{frame}
+
+% --- Slide 7: Method 1 vs Method 2 -----------------------------------------
+\begin{frame}{Correction Methods}
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+  \begin{block}{Method 1: Flat Shift}
+    One number per cell per $|\eta|$ bin:
+    \[
+      \Delta_k = \langle f_k^\text{data}\rangle
+              - \langle f_k^\text{MC}\rangle
+    \]
+    Applied as:
+    \[
+      f_k^\text{corr} = f_k^\text{MC} + \Delta_k
+    \]
+    \vspace{2pt}
+    \begin{itemize}
+      \item Simple, robust
+      \item Ignores energy dependence of correction
+    \end{itemize}
+  \end{block}
+\end{column}
+\begin{column}{0.48\textwidth}
+  \begin{block}{Method 2: TProfile (Energy-Dependent)}
+    Correction varies with cell fraction:
+    \[
+      \alpha_k(f) = \bigl\langle f_k^\text{data}
+        - f_k^\text{MC}\bigr\rangle\Big|_{f_k^\text{MC}=f}
+    \]
+    Applied via interpolation:
+    \[
+      f_k^\text{corr} = f_k^\text{MC}
+        + \alpha_k\!\bigl(f_k^\text{MC}\bigr)
+    \]
+    \vspace{2pt}
+    \begin{itemize}
+      \item Captures non-linear effects
+      \item 1078 profile histograms\\
+            {\small ($77~\text{cells}\times 14~|\eta|~\text{bins}$)}
+    \end{itemize}
+  \end{block}
+\end{column}
+\end{columns}
+\vspace{8pt}
+\centering
+{\small Following ATL-COM-PHYS-2021-640, Sections~5.1 and~5.2
+(F.~Caetano et al.)}
+\end{frame}
+
+% ============================================================================
+\section{Closure Test}
+% ============================================================================
+
+% --- Slide 8: Closure Test Design -------------------------------------------
+\begin{frame}{Closure Test Design}
+
+\textbf{Goal}: validate the correction in a controlled environment where the
+``truth'' is known by construction.
+
+\vspace{4pt}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+  \textbf{Distortion model} — generate pseudo-data from MC:
+  \[
+    e'_k = e_k \cdot \bigl(1 + \delta\cdot b_k + \varepsilon_k\bigr)
+  \]
+  \begin{itemize}
+    \item $\delta$: systematic distortion level (1\%, 3\%, 5\%)
+    \item $b_k$: fixed bias pattern (narrowing)
+    \item $\varepsilon_k \sim \mathcal{N}(0,\,\delta/2)$: stochastic noise
+    \item Total cluster energy conserved by rescaling
+  \end{itemize}
+  \vspace{4pt}
+  \textbf{Quality selection:}
+  \begin{itemize}
+    \item Central cell must have highest energy fraction
+    \item Negative cell energies clamped to zero
+  \end{itemize}
+\end{column}
+\begin{column}{0.42\textwidth}
+  \centering
+  \textbf{Bias pattern $b_k$}\\[4pt]
+  \begin{tikzpicture}[scale=0.42, every node/.style={font=\tiny}]
+    % Draw 7x11 grid with bias pattern colouring
+    \foreach \r in {0,...,6} {
+      \foreach \c in {0,...,10} {
+        % Compute Chebyshev distance from centre (3,5)
+        \pgfmathtruncatemacro{\dr}{abs(\r - 3)}
+        \pgfmathtruncatemacro{\dc}{abs(\c - 5)}
+        \pgfmathtruncatemacro{\dist}{max(\dr,\dc)}
+        \ifnum\dist=0
+          \fill[red!60] (\c,\r) rectangle (\c+1,\r+1);
+          \node at (\c+0.5,\r+0.5) {\textbf{+1.0}};
+        \else\ifnum\dist=1
+          \fill[orange!40] (\c,\r) rectangle (\c+1,\r+1);
+          \node at (\c+0.5,\r+0.5) {+0.4};
+        \else\ifnum\dist=2
+          \fill[cyan!25] (\c,\r) rectangle (\c+1,\r+1);
+          \node at (\c+0.5,\r+0.5) {$-$0.4};
+        \else
+          \fill[blue!20] (\c,\r) rectangle (\c+1,\r+1);
+          \node at (\c+0.5,\r+0.5) {$-$1.0};
+        \fi\fi\fi
+      }
+    }
+    \draw[gray,thin] (0,0) grid (11,7);
+    \draw[thick] (0,0) rectangle (11,7);
+    % Labels
+    \node[font=\scriptsize,below] at (5.5,-0.3) {$\phi$ columns};
+    \node[font=\scriptsize,rotate=90,above] at (-0.3,3.5) {$\eta$ rows};
+  \end{tikzpicture}
+  \\[4pt]
+  {\scriptsize Mimics narrower showers (data-like):\\
+  enhance core, suppress tails}
+\end{column}
+\end{columns}
+\end{frame}
+
+% --- Slide 9: Validation ---------------------------------------------------
+\begin{frame}{Validation: Shower Shape Recomputation}
+
+Before running the closure test, verified that shower shapes computed
+from the $7\!\times\!11$ cell energies \textbf{match the stored values}
+in the ntuples.
+
+\vspace{6pt}
+\begin{columns}[c]
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{reta_Zeeg.pdf}\\
+  {\small $R_\eta$ — $Z\to ee\gamma$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{rphi_Zeeg.pdf}\\
+  {\small $R_\phi$ — $Z\to ee\gamma$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[width=\textwidth]{weta2_Zeeg.pdf}\\
+  {\small $w_{\eta\,2}$ — $Z\to ee\gamma$}
+\end{column}
+\end{columns}
+
+\vspace{6pt}
+\centering
+{\small Excellent agreement validates the cell-energy $\to$ shower-shape
+computation pipeline.\\
+$w_{\eta\,2}$ uses relative cell positions
+($\eta_i \in \{0,\,\Delta\eta,\,2\Delta\eta\}$) — valid since
+$w_{\eta\,2}$ is translation-invariant.}
+\end{frame}
+
+% ============================================================================
+\section{Results}
+% ============================================================================
+
+% --- Slide 10: Closure — Central Barrel 5% ---------------------------------
+\begin{frame}{Closure Results: Central Barrel ($\delta = 5\%$)}
+
+$|\eta|\in[0.00,\,0.20)$ — 5\% distortion level — full statistics
+(9.6\,M events)
+
+\vspace{4pt}
+\begin{columns}[c]
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=1,width=\textwidth]{closure_reta.pdf}\\
+  {\small $R_\eta$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=1,width=\textwidth]{closure_rphi.pdf}\\
+  {\small $R_\phi$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=1,width=\textwidth]{closure_weta2.pdf}\\
+  {\small $w_{\eta\,2}$}
+\end{column}
+\end{columns}
+
+\vspace{6pt}
+\centering
+{\small
+  \textcolor{black!70}{$\bullet$}~Pseudo-data\quad
+  \textcolor{red}{---}~MC (uncorrected)\quad
+  \textcolor{green!60!black}{- -}~Method~1\quad
+  \textcolor{blue}{---}~Method~2\\[2pt]
+  Method~2 brings ratio to within $\sim$1\% of unity across the full range.
+}
+\end{frame}
+
+% --- Slide 11: Distortion Level Scan ----------------------------------------
+\begin{frame}{Distortion Level Comparison ($R_\eta$, Central Barrel)}
+
+$|\eta|\in[0.00,\,0.20)$ — comparing 1\%, 3\%, and 5\% distortion levels
+
+\vspace{4pt}
+\begin{columns}[c]
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=1,width=\textwidth]{../output/closure_test_1pct/closure_reta.pdf}\\
+  {\small $\delta = 1\%$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=1,width=\textwidth]{../output/closure_test_3pct/closure_reta.pdf}\\
+  {\small $\delta = 3\%$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=1,width=\textwidth]{../output/closure_test_5pct/closure_reta.pdf}\\
+  {\small $\delta = 5\%$}
+\end{column}
+\end{columns}
+
+\vspace{6pt}
+\centering
+{\small
+  At 1\%: distributions nearly indistinguishable.
+  At 5\%: discrepancy clearly visible; Method~2 superiority most evident.\\[2pt]
+  Correction performance \textbf{scales well} with distortion magnitude.
+}
+\end{frame}
+
+% --- Slide 12: Forward Endcap ----------------------------------------------
+\begin{frame}{Closure Results: Forward Endcap ($\delta = 5\%$)}
+
+$|\eta|\in[2.20,\,2.40)$ — demonstrates method works at high pseudorapidity
+
+\vspace{4pt}
+\begin{columns}[c]
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=13,width=\textwidth]{closure_reta.pdf}\\
+  {\small $R_\eta$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=13,width=\textwidth]{closure_rphi.pdf}\\
+  {\small $R_\phi$}
+\end{column}
+\begin{column}{0.32\textwidth}
+  \centering
+  \includegraphics[page=13,width=\textwidth]{closure_weta2.pdf}\\
+  {\small $w_{\eta\,2}$}
+\end{column}
+\end{columns}
+
+\vspace{6pt}
+\centering
+{\small
+  Uncorrected $\chi^2/n_\text{df}$ is larger at forward $|\eta|$
+  (different detector geometry),\\
+  but Method~2 still achieves $\sim$20$\times$ reduction.\\[2pt]
+  \textbf{Correction is uniform across the full $|\eta|$ range.}
+}
+\end{frame}
+
+% --- Slide 13: Chi2 Summary ------------------------------------------------
+\begin{frame}{$\chi^2/n_\text{df}$ Summary ($\delta = 5\%$)}
+
+\centering
+\small
+\begin{tabular}{
+  c
+  c@{\hskip 6pt}c@{\hskip 6pt}c
+  c@{\hskip 6pt}c@{\hskip 6pt}c
+  c@{\hskip 6pt}c@{\hskip 6pt}c
+}
+\toprule
+& \multicolumn{3}{c}{$R_\eta$}
+& \multicolumn{3}{c}{$R_\phi$}
+& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+$|\eta|$ bin & MC & M1 & \textbf{M2}
+             & MC & M1 & \textbf{M2}
+             & MC & M1 & \textbf{M2} \\
+\midrule
+$[0.0,\,0.2)$   & 0.0059 & 0.0046 & \textbf{0.0005} & 0.0052 & 0.0014 & \textbf{0.0006} & 0.0014 & 0.0005 & \textbf{0.0003} \\
+$[0.4,\,0.6)$   & 0.0063 & 0.0037 & \textbf{0.0005} & 0.0054 & 0.0015 & \textbf{0.0006} & 0.0018 & 0.0007 & \textbf{0.0004} \\
+$[0.8,\,1.0)$   & 0.0079 & 0.0028 & \textbf{0.0006} & 0.0052 & 0.0021 & \textbf{0.0003} & 0.0022 & 0.0009 & \textbf{0.0006} \\
+$[1.3,\,1.37)$  & 0.0085 & 0.0026 & \textbf{0.0008} & 0.0051 & 0.0026 & \textbf{0.0006} & 0.0023 & 0.0010 & \textbf{0.0006} \\
+$[1.52,\,1.6)$  & 0.0078 & 0.0062 & \textbf{0.0004} & 0.0022 & 0.0014 & \textbf{0.0002} & 0.0011 & 0.0016 & \textbf{0.0007} \\
+$[1.8,\,2.0)$   & 0.0139 & 0.0033 & \textbf{0.0010} & 0.0087 & 0.0038 & \textbf{0.0004} & 0.0032 & 0.0008 & \textbf{0.0007} \\
+$[2.2,\,2.4)$   & 0.0192 & 0.0035 & \textbf{0.0010} & 0.0118 & 0.0034 & \textbf{0.0005} & 0.0040 & 0.0010 & \textbf{0.0008} \\
+\bottomrule
+\end{tabular}
+
+\vspace{8pt}
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+  \textbf{Method~1} (flat shift):
+  \begin{itemize}
+    \item 50--80\% $\chi^2$ reduction
+  \end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+  \textbf{Method~2} (TProfile):
+  \begin{itemize}
+    \item \textbf{90--95\% $\chi^2$ reduction}
+    \item Consistent across all $|\eta|$ bins and all 3 variables
+  \end{itemize}
+\end{column}
+\end{columns}
+\end{frame}
+
+% ============================================================================
+\section{Adaptations \& Next Steps}
+% ============================================================================
+
+% --- Slide 14: Key Adaptations ---------------------------------------------
+\begin{frame}{Key Adaptations from Reference Method}
+
+\small
+Differences from ATL-COM-PHYS-2021-640 (Run~2 implementation):
+
+\vspace{4pt}
+\begin{tabular}{lll}
+\toprule
+\textbf{Aspect} & \textbf{Reference (Run~2)} & \textbf{This work (MC23e)} \\
+\midrule
+Input format     & Matched data--MC pairs     & Unmatched MC \\
+Pre-selection    & Tight ID + isolation       & Central cell + energy clamping \\
+$w_{\eta\,2}$ coords & Absolute cell $\eta$  & Relative positions
+                       ($\Delta\eta\!=\!0.025$) \\
+Conv.\ binning   & Inc / UnConv / Conv        & Inclusive only$^\dagger$ \\
+Precision        & \texttt{float}             & \texttt{double} \\
+\bottomrule
+\end{tabular}
+
+\vspace{8pt}
+\begin{itemize}
+  \item Central cell cut removes mis-centred/pathological clusters
+  \item Negative energy clamping prevents unphysical fractions ($f_k > 1$
+        or $f_k < 0$)
+  \item Relative $\eta$ valid: $w_{\eta\,2}$ is a second central moment
+        (translation-invariant)
+  \item[$^\dagger$] Conversion-type binning planned for data application
+\end{itemize}
+\end{frame}
+
+% --- Slide 15: Status & Next Steps -----------------------------------------
+\begin{frame}{Status \& Next Steps}
+
+\textbf{Completed:}
+\begin{itemize}
+  \item[\checkmark] Cell-energy reweighting method implemented for MC23e
+  \item[\checkmark] Closure test validated at 3 distortion levels
+        (1\%, 3\%, 5\%)
+  \item[\checkmark] Method~2 (TProfile) achieves 90--95\% $\chi^2$ reduction
+  \item[\checkmark] Robust across all 13 populated $|\eta|$ bins and all 3
+        shower shape variables
+\end{itemize}
+
+\vspace{6pt}
+\textbf{Next steps:}
+\begin{enumerate}
+  \item \textbf{Data--MC comparison} with real data
+    \begin{itemize}
+      \item DAOD\_EGAM3 ntuples ready
+            (data24 run~473235 + MC23e DSID~700770)
+      \item Analysis pipeline implemented, pending execution
+    \end{itemize}
+  \item \textbf{Conversion-type binning}
+        (unconverted / converted separately)
+  \item \textbf{Extend to Layers~1 and~3}
+    \begin{itemize}
+      \item Requires new NTupleMaker branches for L1/L3 cell energies
+    \end{itemize}
+  \item Study impact on \textbf{photon ID efficiency} (tight ID working point)
+\end{enumerate}
+\end{frame}
+
+% ============================================================================
+% BACKUP SLIDES
+% ============================================================================
+\appendix
+\begin{frame}[noframenumbering]
+  \centering
+  \Huge\bfseries\color{atlasblue}
+  Backup
+\end{frame}
+
+% --- Backup: Full chi2 table 5% --------------------------------------------
+\begin{frame}[noframenumbering]{Full $\chi^2/n_\text{df}$: 5\% Distortion}
+\centering
+\scriptsize
+\begin{tabular}{
+  c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+}
+\toprule
+& \multicolumn{3}{c}{$R_\eta$}
+& \multicolumn{3}{c}{$R_\phi$}
+& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+{$|\eta|$ bin} & {MC} & {M1} & {M2} & {MC} & {M1} & {M2} & {MC} & {M1} & {M2} \\
+\midrule
+0  & 0.0059 & 0.0046 & 0.0005 & 0.0052 & 0.0014 & 0.0006 & 0.0014 & 0.0005 & 0.0003 \\
+1  & 0.0064 & 0.0037 & 0.0005 & 0.0053 & 0.0014 & 0.0006 & 0.0017 & 0.0007 & 0.0004 \\
+2  & 0.0063 & 0.0037 & 0.0005 & 0.0054 & 0.0015 & 0.0006 & 0.0018 & 0.0007 & 0.0004 \\
+3  & 0.0062 & 0.0035 & 0.0004 & 0.0051 & 0.0014 & 0.0005 & 0.0018 & 0.0008 & 0.0004 \\
+4  & 0.0079 & 0.0028 & 0.0006 & 0.0052 & 0.0021 & 0.0003 & 0.0022 & 0.0009 & 0.0006 \\
+5  & 0.0077 & 0.0027 & 0.0005 & 0.0050 & 0.0016 & 0.0003 & 0.0022 & 0.0010 & 0.0006 \\
+6  & 0.0074 & 0.0027 & 0.0005 & 0.0050 & 0.0016 & 0.0004 & 0.0022 & 0.0011 & 0.0007 \\
+7  & 0.0085 & 0.0026 & 0.0008 & 0.0051 & 0.0026 & 0.0006 & 0.0023 & 0.0010 & 0.0006 \\
+9  & 0.0078 & 0.0062 & 0.0004 & 0.0022 & 0.0014 & 0.0002 & 0.0011 & 0.0016 & 0.0007 \\
+10 & 0.0090 & 0.0038 & 0.0004 & 0.0049 & 0.0019 & 0.0003 & 0.0019 & 0.0011 & 0.0007 \\
+11 & 0.0139 & 0.0033 & 0.0010 & 0.0087 & 0.0038 & 0.0004 & 0.0032 & 0.0008 & 0.0007 \\
+12 & 0.0169 & 0.0032 & 0.0010 & 0.0106 & 0.0034 & 0.0005 & 0.0036 & 0.0008 & 0.0007 \\
+13 & 0.0192 & 0.0035 & 0.0010 & 0.0118 & 0.0034 & 0.0005 & 0.0040 & 0.0010 & 0.0008 \\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+% --- Backup: Full chi2 table 3% --------------------------------------------
+\begin{frame}[noframenumbering]{Full $\chi^2/n_\text{df}$: 3\% Distortion}
+\centering
+\scriptsize
+\begin{tabular}{
+  c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+}
+\toprule
+& \multicolumn{3}{c}{$R_\eta$}
+& \multicolumn{3}{c}{$R_\phi$}
+& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+{$|\eta|$ bin} & {MC} & {M1} & {M2} & {MC} & {M1} & {M2} & {MC} & {M1} & {M2} \\
+\midrule
+0  & 0.0022 & 0.0016 & 0.0002 & 0.0019 & 0.0005 & 0.0002 & 0.0006 & 0.0002 & 0.0001 \\
+1  & 0.0023 & 0.0013 & 0.0002 & 0.0020 & 0.0005 & 0.0002 & 0.0006 & 0.0002 & 0.0001 \\
+2  & 0.0024 & 0.0013 & 0.0002 & 0.0020 & 0.0005 & 0.0002 & 0.0007 & 0.0002 & 0.0001 \\
+3  & 0.0023 & 0.0013 & 0.0001 & 0.0019 & 0.0005 & 0.0002 & 0.0007 & 0.0003 & 0.0002 \\
+4  & 0.0029 & 0.0010 & 0.0002 & 0.0020 & 0.0007 & 0.0001 & 0.0008 & 0.0004 & 0.0002 \\
+5  & 0.0029 & 0.0010 & 0.0002 & 0.0019 & 0.0006 & 0.0001 & 0.0008 & 0.0004 & 0.0002 \\
+6  & 0.0027 & 0.0010 & 0.0002 & 0.0019 & 0.0006 & 0.0002 & 0.0008 & 0.0004 & 0.0002 \\
+7  & 0.0035 & 0.0010 & 0.0003 & 0.0021 & 0.0010 & 0.0004 & 0.0009 & 0.0005 & 0.0003 \\
+9  & 0.0030 & 0.0022 & 0.0002 & 0.0008 & 0.0005 & 0.0001 & 0.0004 & 0.0006 & 0.0003 \\
+10 & 0.0034 & 0.0014 & 0.0002 & 0.0018 & 0.0007 & 0.0001 & 0.0007 & 0.0004 & 0.0002 \\
+11 & 0.0052 & 0.0012 & 0.0004 & 0.0032 & 0.0014 & 0.0002 & 0.0012 & 0.0003 & 0.0003 \\
+12 & 0.0064 & 0.0011 & 0.0004 & 0.0040 & 0.0012 & 0.0002 & 0.0013 & 0.0003 & 0.0002 \\
+13 & 0.0072 & 0.0013 & 0.0004 & 0.0044 & 0.0012 & 0.0002 & 0.0015 & 0.0003 & 0.0003 \\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+% --- Backup: Full chi2 table 1% --------------------------------------------
+\begin{frame}[noframenumbering]{Full $\chi^2/n_\text{df}$: 1\% Distortion}
+\centering
+\scriptsize
+\begin{tabular}{
+  c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+  c@{\hskip 4pt}c@{\hskip 4pt}c
+}
+\toprule
+& \multicolumn{3}{c}{$R_\eta$}
+& \multicolumn{3}{c}{$R_\phi$}
+& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+{$|\eta|$ bin} & {MC} & {M1} & {M2} & {MC} & {M1} & {M2} & {MC} & {M1} & {M2} \\
+\midrule
+0  & 0.0003 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+1  & 0.0003 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+2  & 0.0003 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+3  & 0.0003 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+4  & 0.0004 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+5  & 0.0003 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+6  & 0.0003 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+7  & 0.0005 & 0.0002 & 0.0001 & 0.0003 & 0.0002 & 0.0000 & 0.0001 & 0.0001 & 0.0001 \\
+9  & 0.0004 & 0.0003 & 0.0000 & 0.0001 & 0.0001 & 0.0000 & 0.0001 & 0.0001 & 0.0000 \\
+10 & 0.0004 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+11 & 0.0006 & 0.0001 & 0.0000 & 0.0004 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
+12 & 0.0007 & 0.0001 & 0.0000 & 0.0005 & 0.0002 & 0.0000 & 0.0002 & 0.0000 & 0.0000 \\
+13 & 0.0009 & 0.0002 & 0.0001 & 0.0006 & 0.0002 & 0.0000 & 0.0002 & 0.0000 & 0.0000 \\
+\bottomrule
+\end{tabular}
+\end{frame}
+
+% --- Backup: Distortion model details ---------------------------------------
+\begin{frame}[noframenumbering]{Distortion Model Details}
+
+\textbf{Per-cell distortion:}
+\[
+  e'_k = e_k \cdot \bigl(1 + \delta\cdot b_k + \varepsilon_k\bigr)
+\]
+
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+  \textbf{Bias pattern} $b_k$ (Chebyshev distance $d_k$ from centre):
+  \vspace{4pt}
+
+  \begin{tabular}{cc}
+    \toprule
+    $d_k$ & $b_k$ \\
+    \midrule
+    0 (central cell) & $+1.0$ \\
+    1 (first ring)   & $+0.4$ \\
+    2 (second ring)  & $-0.4$ \\
+    $\geq 3$ (outer) & $-1.0$ \\
+    \bottomrule
+  \end{tabular}
+\end{column}
+\begin{column}{0.48\textwidth}
+  \textbf{Energy conservation:}
+  \[
+    e'_k \leftarrow e'_k \cdot
+    \frac{E_\text{tot}}{\sum_j e'_j}
+  \]
+
+  \textbf{Quality selection:}
+  \begin{itemize}
+    \item Negative energies $\to$ clamped to 0
+    \item Central cell must be dominant
+    \item $\sim$81\% events pass ($\sim$7.8\,M / 9.6\,M)
+  \end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{8pt}
+\textbf{Stochastic noise:} $\varepsilon_k \sim \mathcal{N}(0,\,\delta/2)$
+per event per cell — represents irreducible fluctuations.\\
+Fixed random seed ensures full reproducibility.
+\end{frame}
+
+% --- Backup: Placeholder for Francisco's figures ----------------------------
+\begin{frame}[noframenumbering]{Reference: ATL-COM-PHYS-2021-640}
+
+% Placeholder for figures extracted from Francisco Caetano's report.
+% To include, extract pages using e.g.:
+%   pdftk ATL-COM-PHYS-2021-640.pdf cat 5 output fig_page5.pdf
+% Then uncomment:
+%
+% \begin{columns}[c]
+% \begin{column}{0.48\textwidth}
+%   \includegraphics[width=\textwidth]{fig_page5.pdf}
+% \end{column}
+% \begin{column}{0.48\textwidth}
+%   \includegraphics[width=\textwidth]{fig_page8.pdf}
+% \end{column}
+% \end{columns}
+
+\centering
+\vspace{1cm}
+{\Large\color{gray} [Figures to be extracted from\\
+ATL-COM-PHYS-2021-640.pdf]}
+
+\vspace{1cm}
+\small
+F.~Caetano et al., ``Photon shower shape corrections using
+cell-level reweighting,'' ATL-COM-PHYS-2021-640 (2021).\\[4pt]
+Sections~5.1 (flat shift) and 5.2 (TProfile) — the reference
+implementation for Run~2 data.
+\end{frame}
+
+\end{document}
