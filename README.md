@@ -14,9 +14,24 @@ ShowerShapesAnalysis/
 │   ├── compute_weta_2.py      # Compute w_eta_2 from 7×11 cells
 │   ├── plot_reta.C            # ROOT macro: R_eta overlay + ratio
 │   ├── plot_rphi.C            # ROOT macro: R_phi overlay + ratio
-│   └── plot_weta_2.C          # ROOT macro: w_eta_2 overlay + ratio
+│   ├── plot_weta_2.C          # ROOT macro: w_eta_2 overlay + ratio
+│   ├── closure_test/          # MC closure test pipeline
+│   │   ├── config.h           # Shared config: branch names, geometry, helpers
+│   │   ├── create_pseudodata.C
+│   │   ├── derive_corrections.C
+│   │   ├── apply_corrections.C
+│   │   ├── validate_closure.C
+│   │   ├── plot_closure.C
+│   │   ├── run_closure_test.sh
+│   │   └── run_closure_suite.sh
+│   └── data_mc/               # Data-MC comparison + reweighting
+│       ├── compute_and_compare.C   # Initial data-vs-MC comparison
+│       ├── validate_data_mc.C      # Validation (4 samples, chi²)
+│       ├── plot_data_mc.C          # Final overlay plots
+│       └── run_data_mc.sh          # Driver script (6-step pipeline)
 ├── grid/               # Grid submission scripts (pathena)
 │   ├── samples/        # Sample lists (dataset names)
+│   ├── download_ntuples.sh    # Download + merge ntuples from grid
 │   ├── submit_data22.sh
 │   ├── submit_data24.sh
 │   └── submit_mc23e_Zllg.sh
@@ -27,7 +42,12 @@ ShowerShapesAnalysis/
 │   └── mc23e/          # MC23e (Zeeg 13 GB, Zmumug 23 GB)
 ├── output/             # Computed histograms + plots (gitignored)
 │   ├── *.root          # Histogram ROOT files from compute scripts
-│   └── plots/          # PDF plots from ROOT macros
+│   ├── plots/          # PDF plots from ROOT macros
+│   └── data_mc_comparison/  # Data-MC pipeline output
+├── report/             # Reports and documentation
+│   ├── egam3_problem_report.md       # DAOD_EGAM3 problem analysis
+│   ├── weta2_investigation_summary.md # w_eta_2 study summary
+│   └── data_mc_comparison_report.tex  # Data-MC comparison report
 └── setup.sh            # Environment setup
 ```
 
@@ -48,6 +68,28 @@ python compute_weta_2.py -i ../ntuples/mc23e/mc23e_700770_Zeeg.root -o ../output
 root -l -b -q 'plot_reta.C("../output/reta_Zeeg.root","../output/plots/reta_Zeeg")'
 root -l -b -q 'plot_rphi.C("../output/rphi_Zeeg.root","../output/plots/rphi_Zeeg")'
 root -l -b -q 'plot_weta_2.C("../output/weta2_Zeeg.root","../output/plots/weta2_Zeeg")'
+```
+
+## MC Closure Test Pipeline
+
+Validates cell-energy reweighting corrections using synthetic distortions:
+
+```bash
+cd scripts/closure_test
+./run_closure_test.sh        # Single distortion level
+./run_closure_suite.sh       # Suite: 1%, 3%, 5% distortions
+```
+
+See `scripts/closure_test/README.md` for full documentation.
+
+## Data-MC Comparison Pipeline
+
+```bash
+# Download ntuples from completed grid jobs
+cd grid && ./download_ntuples.sh && cd ..
+
+# Run the full pipeline (compute, derive corrections, apply, validate, plot)
+cd scripts/data_mc && ./run_data_mc.sh
 ```
 
 ## Grid Submission
@@ -107,6 +149,10 @@ These files are automatically picked up by GitHub Copilot in VS Code.
 - [x] Copilot instructions
 - [x] Add fudged variable on top of R_eta / R_phi plots
 - [x] w_eta_2 comparison plot (compute + fudged/unfudged overlay)
-- [ ] Run on data24 (grid job submission)
-- [ ] Add random noise to MC cells
+- [x] MC closure test pipeline (cell-energy reweighting)
+- [x] Data-MC comparison pipeline
+- [x] Add L2 cell eta/phi branches to NTupleMaker
+- [x] Grid production v3 (task 49065711, 35M events, AODs with L2 eta/phi branches)
+- [ ] Download v3 grid output and run analysis
+- [ ] Resolve w_eta_2 computation discrepancy (see report/weta2_investigation_summary.md)
 - [ ] Apply Francisco's shower shape reweighting correction

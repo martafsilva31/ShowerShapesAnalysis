@@ -30,9 +30,24 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   ├── compute_weta_2.py      # Compute w_eta_2 from 7×11 cells → histogram ROOT file
 │   ├── plot_reta.C            # ROOT macro: R_eta overlay + ratio
 │   ├── plot_rphi.C            # ROOT macro: R_phi overlay + ratio
-│   └── plot_weta_2.C          # ROOT macro: w_eta_2 overlay + ratio
+│   ├── plot_weta_2.C          # ROOT macro: w_eta_2 overlay + ratio
+│   ├── closure_test/          # MC closure test pipeline
+│   │   ├── config.h           # Shared config: branch names, geometry, helpers
+│   │   ├── create_pseudodata.C
+│   │   ├── derive_corrections.C
+│   │   ├── apply_corrections.C
+│   │   ├── validate_closure.C
+│   │   ├── plot_closure.C
+│   │   ├── run_closure_test.sh
+│   │   └── run_closure_suite.sh
+│   └── data_mc/               # Data-MC comparison + reweighting pipeline
+│       ├── compute_and_compare.C
+│       ├── validate_data_mc.C
+│       ├── plot_data_mc.C
+│       └── run_data_mc.sh
 ├── grid/                      # Grid submission scripts (pathena)
 │   ├── samples/               # Dataset sample lists
+│   ├── download_ntuples.sh    # Download + merge ntuples from grid
 │   ├── submit_data22.sh       # Data 2022 (broken — GRL mismatch)
 │   ├── submit_data24.sh       # Data 2024 run 473235
 │   └── submit_mc23e_Zllg.sh   # MC23e Z→llγ (Zeeg + Zmumug)
@@ -43,7 +58,12 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   └── mc23e/                 # mc23e_700770_Zeeg.root (13 GB), mc23e_700771_Zmumug.root (23 GB)
 ├── output/                    # gitignored — computed histograms + plots
 │   ├── *.root                 # Histogram ROOT files from compute scripts
-│   └── plots/                 # PDF plots from ROOT macros
+│   ├── plots/                 # PDF plots from ROOT macros
+│   └── data_mc_comparison/    # Data-MC pipeline output
+├── report/                    # Reports and documentation
+│   ├── egam3_problem_report.md
+│   ├── weta2_investigation_summary.md
+│   └── data_mc_comparison_report.tex
 └── setup.sh                   # Environment: setupATLAS + Athena 25.0.40 + NTupleMaker build
 ```
 
