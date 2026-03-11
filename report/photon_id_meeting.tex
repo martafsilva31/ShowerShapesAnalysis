@@ -81,58 +81,34 @@
 \section{Motivation \& Context}
 % ============================================================================
 
-% --- Slide 3: Photon ID & Shower Shapes ------------------------------------
-\begin{frame}{Photon Identification \& Shower Shapes}
+% --- Slide 3: Motivation ---------------------------------------------------
+\begin{frame}{Motivation}
 
-\begin{columns}[T]
-\begin{column}{0.55\textwidth}
-  \textbf{Photon identification in ATLAS} uses a cut-based approach
-  on calorimeter and tracking variables:
-  \begin{itemize}
-    \item \textbf{Loose} and \textbf{Tight} working points defined by
-          rectangular cuts on \emph{shower shape variables}
-    \item Shower shapes characterise the \textbf{lateral and longitudinal
-          energy profile} of the electromagnetic shower
-    \item Key discriminants in the \textbf{second EM sampling layer}
-          (Layer~2): $R_\eta$, $R_\phi$, $w_{\eta\,2}$
-    \item Also used: Layer~1 strip variables ($w_{s\,3}$, $w_{s\,\text{tot}}$,
-          $F_\text{side}$, $\Delta E$, $E_\text{ratio}$), hadronic leakage
-  \end{itemize}
+  \textbf{Photon identification in ATLAS} relies on rectangular cuts
+  on shower shape variables, computed from cell energies in the
+  EM calorimeter.
+  \vspace{8pt}
+
+  \textbf{Problem:} well-known mismodelling of calorimeter shower
+  shapes in the Geant4 simulation.
   \vspace{4pt}
-  Accurate modelling of shower shapes in MC is \textbf{essential} for
-  measuring photon ID efficiency via data-driven methods (e.g.\ tag-and-probe
-  with $Z\to\ell\ell\gamma$).
-\end{column}
-\begin{column}{0.42\textwidth}
-  % Placeholder for calorimeter diagram from Francisco's report
-  % Uncomment and adjust path after extracting figure:
-  % \includegraphics[width=\textwidth]{fig_calorimeter.pdf}
-  \begin{center}
-  \begin{tikzpicture}[scale=0.42]
-    % Simplified EM calorimeter layer schematic
-    \fill[atlasblue!8] (0,3.5) rectangle (7,5.5);
-    \node[font=\footnotesize] at (3.5,5.0) {Presampler};
-    \fill[atlasblue!15] (0,0.2) rectangle (7,3.3);
-    \node[font=\footnotesize] at (3.5,2.7) {Layer 1 (strips)};
-    \node[font=\scriptsize] at (3.5,1.7) {$\Delta\eta\!\times\!\Delta\phi = 0.003\!\times\!0.1$};
-    \fill[atlasblue!30] (0,-3.5) rectangle (7,-0.1);
-    \node[font=\footnotesize\bfseries] at (3.5,-0.5) {Layer 2};
-    \node[font=\scriptsize] at (3.5,-1.4) {$\Delta\eta\!\times\!\Delta\phi = 0.025\!\times\!0.025$};
-    \node[font=\scriptsize] at (3.5,-2.3) {Most of shower energy};
-    \fill[atlasblue!12] (0,-5.5) rectangle (7,-3.8);
-    \node[font=\footnotesize] at (3.5,-4.2) {Layer 3};
-    \node[font=\scriptsize] at (3.5,-5.0) {$\Delta\eta\!\times\!\Delta\phi = 0.05\!\times\!0.025$};
-    % arrow
-    \draw[->,thick,red!70!black] (-0.8,6.0) -- (-0.8,-5.5)
-      node[midway,left,font=\scriptsize,align=center] {$\gamma$ / $e$\\shower};
-    % braces
-    \draw[decorate,decoration={brace,mirror,amplitude=5pt}]
-      (7.3,-3.5) -- (7.3,-0.1)
-      node[midway,right=6pt,font=\scriptsize,align=left] {$R_\eta$, $R_\phi$,\\$w_{\eta\,2}$};
-  \end{tikzpicture}
-  \end{center}
-\end{column}
-\end{columns}
+
+  Several sources of mismodelling:
+  \begin{itemize}
+    \item Detector geometry description in simulation
+    \item Cross-talk — signal leakage between LAr cells
+          due to non-ideal connections
+    \item Magnetic field modelling
+  \end{itemize}
+  \vspace{6pt}
+
+  \begin{itemize}
+    \item Need to correct these effects to better represent data
+    \item Improving G4 is very time-consuming
+    \item Currently, direct data-driven corrections to the shower
+          shapes are derived, the so-called \textbf{fudge factors} (FF)
+  \end{itemize}
+
 \end{frame}
 
 % --- Slide 4: Fudge Factors & Motivation -----------------------------------
@@ -181,10 +157,10 @@
 
 \begin{block}{Objective}
 Continue and extend the cell-level shower shape correction studies
-for \textbf{Run~3 conditions} (MC23), building on the Run~2 method
+for \textbf{Run~3 conditions}, building on the Run~2 method
 developed in ATL-COM-PHYS-2021-640.
 \end{block}
-\vspace{6pt}
+\vspace{4pt}
 
 \textbf{Previous work} (Run~2, F.~Caetano et al.):
 \begin{itemize}
@@ -194,14 +170,19 @@ developed in ATL-COM-PHYS-2021-640.
   \item Demonstrated improved data--MC agreement for $R_\eta$, $R_\phi$,
         $w_{\eta\,2}$
 \end{itemize}
-\vspace{6pt}
+\vspace{4pt}
 
 \textbf{This work — scope:}
 \begin{enumerate}
-  \item \textbf{Validate} the method with Run~3 MC (MC23e) via closure tests
-  \item \textbf{Apply} corrections to real Run~3 data using DAOD\_EGAM3 ntuples
-  \item \textbf{Extend} the approach to \textbf{Layers~1 and~3} of the EM calorimeter
+  \item \textbf{Validate} the cell-energy reweighting method with Run~3 MC
+        via closure tests
+  \item \textbf{Apply} corrections to real Run~3 data
+  \item \textbf{Extend} the approach to \textbf{Layers~1 and~3}
         (strip and back layers)
+  \item \textbf{Explore normalising flows} as an alternative correction
+        method — learn the full multivariate data--MC transformation
+        at cell level, capturing inter-cell correlations and
+        conditioning on $p_\text{T}$, $\eta$, conversion type
 \end{enumerate}
 \end{frame}
 

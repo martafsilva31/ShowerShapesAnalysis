@@ -24,7 +24,7 @@ samples_mc23e=(
 	mc23_13p6TeV:mc23_13p6TeV.700771.Sh_2214_mumugamma.merge.AOD.e8514_e8586_s4369_s4370_r16083_r15970
 )
 
-NFILESPERJOB=5
+NFILESPERJOB=1
 
 OWNER="femarta"
 
@@ -40,7 +40,7 @@ do
 		analysis="mumugamma"
 		tag="Zmumug_mc23e"
 	fi
-	version="v1"
+	version="v2"
 	outDS="user.${OWNER}.${dsid}.${tag}.${version}"
 	echo "  outDS=${outDS}  nFilesPerJob=${NFILESPERJOB}  analysis=${analysis}"
 	pathena --trf "python -m NTupleMaker.jobConfig --inputFile=%IN --outputFile=%OUT.root --MaxEvents=-1 -y 2023 -a ${analysis} -d 0" \

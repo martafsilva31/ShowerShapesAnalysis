@@ -33,3 +33,11 @@ __pycache__/
 
 # LaTeX aux files from standalone plots
 *.aux
+*.nav
+*.snm
+*.toc
+
+# ROOT ACLiC build artifacts
+*_C.d
+*_C.so
+*_ACLiC_*

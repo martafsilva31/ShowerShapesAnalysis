@@ -1,0 +1,200 @@
+%%% data_mc_comparison_report.tex
+%%% Data-MC Shower Shape Comparison with Cell-Energy Reweighting
+%%% Date: 10 March 2026
+%%%
+%%% Compile: pdflatex data_mc_comparison_report.tex
+%%%
+
+\documentclass[a4paper,11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{float}
+
+\title{Data-MC Shower Shape Comparison\\
+       with Cell-Energy Reweighting\\[1em]
+       \large DAOD\_EGAM3 Ntuples}
+\author{Marta Fernandes da Silva}
+\date{10 March 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This note documents the first data-vs-MC comparison of photon shower shape
+variables ($R_\eta$, $R_\phi$, $w_{\eta\,2}$) using DAOD\_EGAM3 ntuples
+processed through the NTupleMaker package (\texttt{dev\_Luca\_EGAM3or4} branch).
+Cell-energy reweighting corrections are derived and applied following the
+method of ATL-COM-PHYS-2021-640, Section~5. Two correction methods are
+compared: flat shift (Method~1) and energy-dependent TProfile (Method~2).
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =====================================================================
+\section{Introduction}
+% =====================================================================
+
+Photon shower shape variables---$R_\eta$, $R_\phi$, and $w_{\eta\,2}$---are
+key discriminants for photon identification in ATLAS. Mismodelling of these
+variables in Monte Carlo simulation degrades the photon ID efficiency
+measurement. The cell-energy reweighting method corrects individual cell
+energy fractions in MC to match data, improving shower shape agreement.
+
+This study uses DAOD\_EGAM3 (radiative $Z$-boson decay) ntuples, which
+provide Layer~2 calorimeter cell energies in a $7\times11$
+($\eta\times\phi$) window around the photon cluster centre.
+
+% =====================================================================
+\section{Datasets}
+% =====================================================================
+
+\begin{table}[h]
+\centering
+\caption{Datasets used in this study.}
+\label{tab:datasets}
+\begin{tabular}{lll}
+\toprule
+\textbf{Sample} & \textbf{Dataset} & \textbf{Grid Task ID} \\
+\midrule
+Data (2024) & \texttt{data24\_13p6TeV.00473235.physics\_Main} & 49030538 \\
+            & \texttt{.deriv.DAOD\_EGAM3.f1444\_m2248\_p6143} & \\
+\midrule
+MC23e (Zee$\gamma$) & \texttt{mc23\_13p6TeV.700770.Sh\_2214\_eegamma} & 49032024 \\
+                     & \texttt{.deriv.DAOD\_EGAM3.e8514\_s4369\_r16083\_p6675} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both samples were processed with the NTupleMaker package on the
+\texttt{dev\_Luca\_EGAM3or4} branch (Athena 25.0.40) using the
+\texttt{-d~0} flag for DAOD input. Output ntuples contain:
+\begin{itemize}
+  \item \texttt{photon.cells\_7x11\_L2}: \texttt{vector<float>}, 77 cell energies
+  \item \texttt{photon.ncells\_7x11\_L2}: cluster size (integer, expected = 77)
+  \item \texttt{photon.reta}, \texttt{photon.unfudged\_reta}: stored (fudged/unfudged) $R_\eta$
+  \item Analogous branches for $R_\phi$ and $w_{\eta\,2}$
+\end{itemize}
+
+% =====================================================================
+\section{Method}
+% =====================================================================
+
+\subsection{Shower Shape Computation from Cells}
+
+Shower shapes are computed directly from the $7\times11$ cell energy array:
+\begin{align}
+  R_\eta &= \frac{E(3\times7)}{E(7\times7)} \\
+  R_\phi &= \frac{E(3\times3)}{E(3\times7)} \\
+  w_{\eta\,2} &= \sqrt{\frac{\sum_i E_i \,\eta_i^2}{\sum_i E_i}
+                 - \left(\frac{\sum_i E_i \,\eta_i}{\sum_i E_i}\right)^2}
+\end{align}
+where $E(m\times n)$ is the energy sum in an $m\,(\eta) \times n\,(\phi)$
+sub-window centred on the cluster, and the $w_{\eta\,2}$ sum runs over a
+$3\times5$ window using relative cell $\eta$ positions
+$(-1, 0, +1) \times 0.025$.
+
+Cell-computed values are validated against the stored \texttt{unfudged\_*}
+branches.
+
+\subsection{Cell-Energy Reweighting}
+
+Following ATL-COM-PHYS-2021-640:
+
+\paragraph{Method~1 (Flat Shift, \S5.1):}
+For each cell~$k$ in each $|\eta|$ bin:
+\begin{equation}
+  \text{shift}_k = \langle f_{\text{data}} \rangle_k - \langle f_{\text{MC}} \rangle_k
+\end{equation}
+where $f_k = e_k / E_{\text{tot}}$ is the cell energy fraction. Applied as:
+$f_k^{\text{corr}} = f_k^{\text{MC}} + \text{shift}_k$.
+
+\paragraph{Method~2 (TProfile, \S5.2):}
+For each cell~$k$, a TProfile captures the energy-dependent correction:
+\begin{equation}
+  \alpha_k(f) = \langle f_{\text{data}} - f_{\text{MC}} \rangle_{f_{\text{MC}} = f}
+\end{equation}
+Applied as: $f_k^{\text{corr}} = f_k^{\text{MC}} + \alpha_k(f_k^{\text{MC}})$.
+
+In both cases, cluster energy is conserved by rescaling:
+$e_k^{\text{corr}} = f_k^{\text{corr}} / \sum_j f_j^{\text{corr}} \times E_{\text{tot}}$.
+
+% =====================================================================
+\section{Initial Comparison (Before Correction)}
+% =====================================================================
+
+The initial data-vs-MC comparison shows the level of mismodelling before
+any correction is applied. Distributions are normalised to unit area for
+shape comparison.
+
+Plots are generated per $|\eta|$ bin (14 bins from 0 to 2.4, excluding
+the crack region $1.37 < |\eta| < 1.52$).
+
+\textit{[Plots to be included from} \texttt{output/data\_mc\_comparison/initial\_*.pdf}\textit{]}
+
+% Uncomment and adjust paths once plots are generated:
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.95\textwidth]{../output/data_mc_comparison/initial_reta.pdf}
+%   \caption{$R_\eta$ data-vs-MC before correction (per $|\eta|$ bin).}
+% \end{figure}
+
+% =====================================================================
+\section{After Correction}
+% =====================================================================
+
+After applying the cell-energy reweighting corrections, the corrected MC
+distributions are compared to data alongside the original MC.
+
+\textit{[Plots to be included from} \texttt{output/data\_mc\_comparison/reta.pdf}\textit{,}
+\texttt{rphi.pdf}\textit{,} \texttt{weta2.pdf}\textit{]}
+
+% \begin{figure}[H]
+%   \centering
+%   \includegraphics[width=0.95\textwidth]{../output/data_mc_comparison/reta.pdf}
+%   \caption{$R_\eta$: Data, MC, and corrected MC (Methods 1 and 2).}
+% \end{figure}
+
+% =====================================================================
+\section{$\chi^2$ Summary}
+% =====================================================================
+
+The $\chi^2$ between normalised MC and data distributions quantifies the
+level of agreement. Both uncorrected MC and the two correction methods
+are compared.
+
+\textit{[Table to be filled from} \texttt{validate\_data\_mc.C} \textit{output]}
+
+\begin{table}[H]
+\centering
+\caption{$\chi^2$/ndf between MC and data, per $|\eta|$ bin (example format).}
+\label{tab:chi2}
+\begin{tabular}{c|ccc|ccc|ccc}
+\toprule
+$|\eta|$ bin & \multicolumn{3}{c|}{$R_\eta$} & \multicolumn{3}{c|}{$R_\phi$} & \multicolumn{3}{c}{$w_{\eta\,2}$} \\
+             & MC & M1 & M2 & MC & M1 & M2 & MC & M1 & M2 \\
+\midrule
+0 & -- & -- & -- & -- & -- & -- & -- & -- & -- \\
+\dots & \multicolumn{9}{c}{\textit{(fill after running pipeline)}} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% =====================================================================
+\section{Conclusions}
+% =====================================================================
+
+\textit{[To be written after reviewing the comparison plots and $\chi^2$ values.]}
+
+\end{document}
