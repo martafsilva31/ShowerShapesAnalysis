@@ -67,10 +67,11 @@ The method operates at the level of individual calorimeter cell energies in the
 second sampling layer, correcting all derived shower shape variables
 simultaneously. Pseudo-data are generated from MC23e $Z\to ee\gamma$
 simulation by applying controlled per-cell energy distortions, and two
-correction methods — a flat additive shift and an energy-dependent profile
-correction — are derived and validated. Using the full sample of 9.6~million
-events, the energy-dependent method achieves $\chi^2/n_\text{df}$ reductions
-of 90--95\% relative to uncorrected Monte Carlo across all pseudorapidity bins
+correction methods — flat cell reweighting
+(§5.1 of ATL-COM-PHYS-2021-640) and energy-dependent cell reweighting
+(§5.2) — are derived and validated. Using the full sample of 9.6~million
+events, the energy-dependent cell reweighting method achieves $\chi^2/n_\text{df}$ reductions
+of 60--95\% relative to uncorrected Monte Carlo across all pseudorapidity bins
 and shower shape variables, demonstrating excellent closure.
 \end{abstract}
 
@@ -106,15 +107,12 @@ typical data--MC differences, corrections are derived and applied using two
 complementary methods, and the corrected distributions are compared to the
 pseudo-data target to quantify the degree of closure.
 
-Three shower shape variables are examined:
+Two shower shape variables are examined:
 \begin{itemize}
   \item $R_\eta = E(3\times7)\,/\,E(7\times7)$, the ratio of energies in
         the $3\eta\times 7\phi$ and $7\eta\times 7\phi$ sub-windows;
   \item $R_\phi = E(3\times3)\,/\,E(3\times7)$, the ratio of energies in
-        the $3\eta\times 3\phi$ and $3\eta\times 7\phi$ sub-windows;
-  \item $w_{\eta\,2} = \sqrt{\langle\eta^2\rangle_E
-        - \langle\eta\rangle_E^2}$, the energy-weighted shower width in
-        $\eta$, computed in a $3\eta\times 5\phi$ window.
+        the $3\eta\times 3\phi$ and $3\eta\times 7\phi$ sub-windows.
 \end{itemize}
 
 % ============================================================================
@@ -201,7 +199,7 @@ analysis.
 \subsection{Energy fraction binning}
 \label{sec:data:fracbins}
 
-The energy-dependent correction (Method~2, described below) uses profile
+The energy-dependent cell reweighting (Method~2, described below) uses profile
 histograms to record the mean correction as a function of the MC cell energy
 fraction. The profile binning uses 12~bins spanning the range $[-1,1]$:
 \begin{equation}
@@ -211,7 +209,7 @@ fraction. The profile binning uses 12~bins spanning the range $[-1,1]$:
 \end{equation}
 This binning provides six bins of width~0.1 in the region $[0,0.5]$ where
 the physical cell fractions are concentrated, ensuring adequate resolution for
-the energy-dependent correction.
+the energy-dependent cell reweighting.
 
 % ============================================================================
 \section{Methodology}
@@ -243,9 +241,11 @@ Sections~5.1 and~5.2 of ATL-COM-PHYS-2021-640.
 \label{sec:method:pseudodata}
 
 The distortion model is designed to mimic the qualitative features of typical
-data--MC discrepancies in photon shower shapes: data tends to exhibit narrower
-showers than simulation, corresponding to a redistribution of energy from
-peripheral cells toward the cluster centre.
+data--MC discrepancies in photon shower shapes: MC simulation tends to produce
+narrower showers than data, corresponding to an excess of energy in the
+cluster centre relative to the periphery. Fudge factors correct this by
+broadening MC showers. The pseudo-data therefore simulates data-like broader
+showers by redistributing energy from the central cells toward the tails.
 
 For each event passing the quality selection, the energy of cell~$k$ is
 modified according to:
@@ -263,15 +263,16 @@ where:
         distance~$d_k$ of cell~$k$ from the central cell~$(3,5)$:
         \begin{equation}
           b_k = \begin{cases}
-            +1.0 & d_k = 0 \;\text{(central cell)}, \\
-            +0.4 & d_k = 1 \;\text{(first ring)}, \\
-            -0.4 & d_k = 2 \;\text{(second ring)}, \\
-            -1.0 & d_k \geq 3 \;\text{(outer cells)}.
+            -1.0 & d_k = 0 \;\text{(central cell)}, \\
+            -0.4 & d_k = 1 \;\text{(first ring)}, \\
+            +0.4 & d_k = 2 \;\text{(second ring)}, \\
+            +1.0 & d_k \geq 3 \;\text{(outer cells)}.
           \end{cases}
           \label{eq:biaspattern}
         \end{equation}
-        This pattern enhances the central core and suppresses the tails,
-        producing a narrowing of the shower.
+        This pattern suppresses the central core and enhances the tails,
+        producing a broadening of the shower that mimics the standard
+        ATLAS data--MC difference.
   \item $\varepsilon_k \sim \mathcal{N}(0,\,\sigma)$ is a
         \textbf{per-event, per-cell Gaussian random noise} with
         $\sigma = \delta/2$, representing stochastic event-by-event
@@ -303,7 +304,7 @@ For each event, cell energy fractions are computed as:
 separately for the MC sample ($f_k^\text{MC}$) and the pseudo-data sample
 ($f_k^\text{PS}$).
 
-\paragraph{Method~1: Flat additive shift.}
+\paragraph{Method~1: Flat cell reweighting (§5.1).}
 This method derives a single additive correction per cell per $|\eta|$ bin:
 \begin{equation}
   \Delta_k^{(n)} =
@@ -316,7 +317,7 @@ bin~$n$. The correction captures the average systematic difference between MC
 and pseudo-data energy fractions but is independent of the event-by-event
 value of~$f_k$.
 
-\paragraph{Method~2: Energy-dependent profile correction.}
+\paragraph{Method~2: Energy-dependent cell reweighting (§5.2).}
 This method derives an energy-dependent correction that varies as a function
 of the MC cell fraction. For each cell~$k$ and $|\eta|$ bin~$n$, a profile
 histogram records:
@@ -343,14 +344,15 @@ One profile histogram is created for each of the 77~cells in each of the
 The corrections are applied to the original MC by modifying the cell energy
 fractions and then reconstructing the cell energies.
 
-\textbf{Method~1} applies a flat shift:
+\textbf{Method~1} (flat cell reweighting, §5.1) applies a flat shift:
 \begin{equation}
   f_k^\text{corr} = f_k^\text{MC} + \Delta_k^{(n)}.
   \label{eq:m1apply}
 \end{equation}
 
-\textbf{Method~2} applies an energy-dependent correction obtained by
-interpolating the profile histogram at the value of the MC fraction:
+\textbf{Method~2} (energy-dependent cell reweighting, §5.2) applies a
+correction obtained by interpolating the profile histogram at the value of
+the MC fraction:
 \begin{equation}
   f_k^\text{corr} = f_k^\text{MC}
     + \alpha_k^{(n)}\!\bigl(f_k^\text{MC}\bigr).
@@ -370,7 +372,7 @@ Events failing the quality selection are passed through without correction.
 \subsection{Shower shape computation}
 \label{sec:method:shapes}
 
-After the correction, the three shower shape variables are recomputed from
+After the correction, the two shower shape variables are recomputed from
 the modified cell energies.
 
 The energy in a rectangular sub-window of dimensions $m\times n$
@@ -396,21 +398,6 @@ where $(c_\eta, c_\phi) = (3,5)$ is the central cell. From this:
   R_\phi = \frac{E(3\times3)}{E(3\times7)}.
   \label{eq:retarphi}
 \end{equation}
-
-The shower width $w_{\eta\,2}$ is computed in a $3\eta\times 5\phi$ window:
-\begin{equation}
-  w_{\eta\,2} = \sqrt{
-    \frac{\sum_i e_i\,\eta_i^2}{\sum_i e_i}
-    - \left(\frac{\sum_i e_i\,\eta_i}{\sum_i e_i}\right)^{\!2}
-  },
-  \label{eq:weta2}
-\end{equation}
-where $\eta_i = (i-1)\times\Delta\eta$ for cell row indices
-$i\in\{0,1,2\}$ in the 3-row sub-window, and $\Delta\eta = 0.025$ is the
-cell size in the second sampling layer. Since $w_{\eta\,2}$ is defined as a
-second central moment, it is invariant under translation, and the use of
-relative positions yields results equivalent to using absolute cell $\eta$
-coordinates.
 
 % ---------- 3.6 Assumptions ------------------------------------------------
 \subsection{Assumptions}
@@ -500,48 +487,11 @@ however, approximately 2.7\% of events have sufficiently large negative cell
 contributions that the sum of cell energies becomes small or negative,
 producing cell energy fractions $f_k > 1$ or $f_k < 0$. These events
 generate pathological corrections that dominate the \texttt{TProfile} means
-and can reverse the sign of the flat-shift corrections. Negative cell energies
+and can reverse the sign of the flat cell reweighting corrections. Negative cell energies
 are therefore clamped to zero before computing energy fractions.
 
 Neither of these requirements is present in the original method because its
 input data has already been cleaned by the matching and selection procedure.
-
-\subsection{Shower width calculation}
-\label{sec:adaptations:weta2}
-
-The second-layer shower width $w_{\eta\,2}$ is defined as the
-energy-weighted RMS of the cell $\eta$ positions in a $3\times5$ window:
-\begin{equation}
-  w_{\eta\,2} = \sqrt{
-    \frac{\sum_{k\in3\times5} E_k\,\eta_k^2}{\sum_{k\in3\times5} E_k}
-    - \left(
-        \frac{\sum_{k\in3\times5} E_k\,|\eta_k|}{\sum_{k\in3\times5} E_k}
-      \right)^{\!2}
-  }.
-  \label{eq:weta2_ref}
-\end{equation}
-The original method evaluates this using the absolute cell $\eta$
-coordinates stored in a dedicated per-cell branch. Since this branch is not
-available in the MC23e ntuples, the calculation uses relative integer
-positions $\eta_i \in \{0,\,\Delta\eta,\,2\Delta\eta\}$ (corresponding to
-the three $\eta$ rows in the $3\times5$ window, with
-$\Delta\eta = 0.025$) in place of absolute $\eta$ coordinates.
-
-This substitution is mathematically valid because $w_{\eta\,2}$ is a
-second central moment (variance), which is invariant under translation of
-the $\eta$ coordinate:
-\begin{equation}
-  \text{Var}(\eta) \;=\; \langle\eta^2\rangle - \langle|\eta|\rangle^2
-  \;=\; \langle(\eta{+}c)^2\rangle - \langle|\eta{+}c|\rangle^2
-  \;=\; \text{Var}(\eta{+}c)
-\end{equation}
-for any constant offset~$c$, provided that all $\eta_k$ values within the
-window have the same sign (guaranteed when using $|\eta_k|$ as in the
-original formula). The resulting $w_{\eta\,2}$ values are expressed in
-units of $\Delta\eta$ rather than absolute pseudorapidity, differing by a
-constant scale factor. For the closure test --- which compares MC,
-pseudo-data, and corrected MC distributions all computed with the
-\emph{same} formula --- this difference cancels exactly.
 
 \subsection{Conversion type binning}
 \label{sec:adaptations:conversion}
@@ -584,7 +534,6 @@ method and the current analysis.
 \midrule
 Input format          & Matched data--MC (\texttt{float}) & Unmatched MC (\texttt{double}) \\
 Pre-selection         & Tight ID + isolation + matching     & Central cell + energy clamping \\
-$w_{\eta\,2}$ $\eta$ coords & Absolute cell $\eta$ values    & Relative positions ($\Delta\eta=0.025$) \\
 Conversion binning    & Inc / NCon / Con                    & Inclusive only$^\dagger$ \\
 TProfile fraction bins & 12 bins in $[-1, 1]$              & Same \\
 $|\eta|$ bins         & 14~bins, $[0, 2.4]$                & Same \\
@@ -618,8 +567,7 @@ sum runs over all bins with non-zero pseudo-data content. The number of
 degrees of freedom $n_\text{df}$ equals the number of non-empty bins. Each
 shower shape variable is binned in 25~bins
 ($R_\eta\in[0.90,1.0]$;
-$R_\phi\in[0.85,1.0]$;
-$w_{\eta\,2}\in[0.008,0.016]$).
+$R_\phi\in[0.85,1.0]$).
 
 A smaller $\chi^2/n_\text{df}$ indicates better agreement. The uncorrected MC
 value is also computed as a baseline.
@@ -649,7 +597,7 @@ fluctuations and provides a sensitive probe of systematic residuals.
 \subsection{Representative closure plots at 5\% distortion}
 \label{sec:results:representative}
 
-\Cref{fig:5pct_eta0} shows the closure plots for all three shower shape
+\Cref{fig:5pct_eta0} shows the closure plots for both shower shape
 variables in the central barrel region ($|\eta|\in[0.00,\,0.20)$) at the
 5\% distortion level. Each plot uses a two-panel format: the upper panel
 displays the normalised distributions overlaid for the pseudo-data (black
@@ -661,27 +609,22 @@ horizontal dashed grey line at unity marking perfect agreement.
 At 5\% distortion, the uncorrected MC is visibly displaced from the
 pseudo-data. Method~1 reduces the discrepancy substantially, and Method~2
 brings the ratio to within~1\% of unity across the full range. This pattern
-is consistent across all three variables.
+is consistent across both variables.
 
 \begin{figure}[htbp]
   \centering
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[page=1,width=\textwidth]{../output/closure_test_5pct/closure_reta.pdf}
     \caption{$R_\eta$}
     \label{fig:5pct_eta0_reta}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[page=1,width=\textwidth]{../output/closure_test_5pct/closure_rphi.pdf}
     \caption{$R_\phi$}
     \label{fig:5pct_eta0_rphi}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
-    \includegraphics[page=1,width=\textwidth]{../output/closure_test_5pct/closure_weta2.pdf}
-    \caption{$w_{\eta\,2}$}
-    \label{fig:5pct_eta0_weta2}
   \end{subfigure}
   \caption{%
-    Closure plots for $R_\eta$~(a), $R_\phi$~(b), and $w_{\eta\,2}$~(c)
+    Closure plots for $R_\eta$~(a) and $R_\phi$~(b)
     at 5\% distortion in the central barrel ($|\eta|\in[0.00,\,0.20)$).
     Upper panels: normalised distributions of pseudo-data (markers),
     uncorrected MC (red), Method~1 (green dashed), and Method~2 (blue).
@@ -690,7 +633,7 @@ is consistent across all three variables.
   \label{fig:5pct_eta0}
 \end{figure}
 
-\Cref{fig:5pct_eta13} shows the same three variables at 5\% distortion in
+\Cref{fig:5pct_eta13} shows the same two variables at 5\% distortion in
 the forward endcap ($|\eta|\in[2.20,\,2.40)$), demonstrating that the
 correction achieves comparable closure at high pseudorapidity where the
 detector geometry differs from the central barrel. The uncorrected MC
@@ -700,17 +643,13 @@ approximately a factor of~20.
 
 \begin{figure}[htbp]
   \centering
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[page=13,width=\textwidth]{../output/closure_test_5pct/closure_reta.pdf}
     \caption{$R_\eta$}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[page=13,width=\textwidth]{../output/closure_test_5pct/closure_rphi.pdf}
     \caption{$R_\phi$}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
-    \includegraphics[page=13,width=\textwidth]{../output/closure_test_5pct/closure_weta2.pdf}
-    \caption{$w_{\eta\,2}$}
   \end{subfigure}
   \caption{%
     Closure plots at 5\% distortion in the forward endcap
@@ -759,7 +698,7 @@ superiority of Method~2 over Method~1 is most evident.
 \label{sec:results:chi2}
 
 \Cref{tab:chi2_1pct,tab:chi2_3pct,tab:chi2_5pct} present the
-$\chi^2/n_\text{df}$ values for all three shower shape variables, in all
+$\chi^2/n_\text{df}$ values for both shower shape variables, in all
 populated $|\eta|$ bins, for the three distortion levels. The columns show
 the uncorrected MC (``MC''), Method~1 (``M1''), and Method~2 (``M2'').
 
@@ -779,31 +718,28 @@ the uncorrected MC (``MC''), Method~1 (``M1''), and Method~2 (``M2'').
   c
   S S S
   S S S
-  S S S
 }
 \toprule
 & \multicolumn{3}{c}{$R_\eta$}
-& \multicolumn{3}{c}{$R_\phi$}
-& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+& \multicolumn{3}{c}{$R_\phi$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
 {$|\eta|$ bin}
-& {MC} & {M1} & {M2}
 & {MC} & {M1} & {M2}
 & {MC} & {M1} & {M2} \\
 \midrule
-0  & 0.0003 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-1  & 0.0003 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-2  & 0.0003 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-3  & 0.0003 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-4  & 0.0004 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-5  & 0.0003 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-6  & 0.0003 & 0.0001 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-7  & 0.0005 & 0.0002 & 0.0001 & 0.0003 & 0.0002 & 0.0000 & 0.0001 & 0.0001 & 0.0001 \\
-9  & 0.0004 & 0.0003 & 0.0000 & 0.0001 & 0.0001 & 0.0000 & 0.0001 & 0.0001 & 0.0000 \\
-10 & 0.0004 & 0.0002 & 0.0000 & 0.0002 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-11 & 0.0006 & 0.0001 & 0.0000 & 0.0004 & 0.0001 & 0.0000 & 0.0001 & 0.0000 & 0.0000 \\
-12 & 0.0007 & 0.0001 & 0.0000 & 0.0005 & 0.0002 & 0.0000 & 0.0002 & 0.0000 & 0.0000 \\
-13 & 0.0009 & 0.0002 & 0.0001 & 0.0006 & 0.0002 & 0.0000 & 0.0002 & 0.0000 & 0.0000 \\
+0  & 0.0003 & 0.0011 & 0.0001 & 0.0002 & 0.0004 & 0.0000 \\
+1  & 0.0003 & 0.0009 & 0.0001 & 0.0002 & 0.0004 & 0.0000 \\
+2  & 0.0003 & 0.0010 & 0.0001 & 0.0002 & 0.0004 & 0.0000 \\
+3  & 0.0003 & 0.0009 & 0.0001 & 0.0002 & 0.0003 & 0.0000 \\
+4  & 0.0003 & 0.0008 & 0.0001 & 0.0002 & 0.0004 & 0.0000 \\
+5  & 0.0003 & 0.0008 & 0.0001 & 0.0002 & 0.0003 & 0.0000 \\
+6  & 0.0003 & 0.0007 & 0.0001 & 0.0002 & 0.0003 & 0.0000 \\
+7  & 0.0005 & 0.0008 & 0.0001 & 0.0003 & 0.0004 & 0.0001 \\
+9  & 0.0004 & 0.0013 & 0.0002 & 0.0001 & 0.0003 & 0.0001 \\
+10 & 0.0004 & 0.0009 & 0.0001 & 0.0002 & 0.0003 & 0.0000 \\
+11 & 0.0006 & 0.0007 & 0.0001 & 0.0003 & 0.0005 & 0.0000 \\
+12 & 0.0007 & 0.0006 & 0.0000 & 0.0004 & 0.0004 & 0.0000 \\
+13 & 0.0008 & 0.0006 & 0.0001 & 0.0005 & 0.0004 & 0.0000 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -824,31 +760,28 @@ the uncorrected MC (``MC''), Method~1 (``M1''), and Method~2 (``M2'').
   c
   S S S
   S S S
-  S S S
 }
 \toprule
 & \multicolumn{3}{c}{$R_\eta$}
-& \multicolumn{3}{c}{$R_\phi$}
-& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+& \multicolumn{3}{c}{$R_\phi$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
 {$|\eta|$ bin}
-& {MC} & {M1} & {M2}
 & {MC} & {M1} & {M2}
 & {MC} & {M1} & {M2} \\
 \midrule
-0  & 0.0022 & 0.0016 & 0.0002 & 0.0019 & 0.0005 & 0.0002 & 0.0006 & 0.0002 & 0.0001 \\
-1  & 0.0023 & 0.0013 & 0.0002 & 0.0020 & 0.0005 & 0.0002 & 0.0006 & 0.0002 & 0.0001 \\
-2  & 0.0024 & 0.0013 & 0.0002 & 0.0020 & 0.0005 & 0.0002 & 0.0007 & 0.0002 & 0.0001 \\
-3  & 0.0023 & 0.0013 & 0.0001 & 0.0019 & 0.0005 & 0.0002 & 0.0007 & 0.0003 & 0.0002 \\
-4  & 0.0029 & 0.0010 & 0.0002 & 0.0020 & 0.0007 & 0.0001 & 0.0008 & 0.0004 & 0.0002 \\
-5  & 0.0029 & 0.0010 & 0.0002 & 0.0019 & 0.0006 & 0.0001 & 0.0008 & 0.0004 & 0.0002 \\
-6  & 0.0027 & 0.0010 & 0.0002 & 0.0019 & 0.0006 & 0.0002 & 0.0008 & 0.0004 & 0.0002 \\
-7  & 0.0035 & 0.0010 & 0.0003 & 0.0021 & 0.0010 & 0.0004 & 0.0009 & 0.0005 & 0.0003 \\
-9  & 0.0030 & 0.0022 & 0.0002 & 0.0008 & 0.0005 & 0.0001 & 0.0004 & 0.0006 & 0.0003 \\
-10 & 0.0034 & 0.0014 & 0.0002 & 0.0018 & 0.0007 & 0.0001 & 0.0007 & 0.0004 & 0.0002 \\
-11 & 0.0052 & 0.0012 & 0.0004 & 0.0032 & 0.0014 & 0.0002 & 0.0012 & 0.0003 & 0.0003 \\
-12 & 0.0064 & 0.0011 & 0.0004 & 0.0040 & 0.0012 & 0.0002 & 0.0013 & 0.0003 & 0.0002 \\
-13 & 0.0072 & 0.0013 & 0.0004 & 0.0044 & 0.0012 & 0.0002 & 0.0015 & 0.0003 & 0.0003 \\
+0  & 0.0023 & 0.0082 & 0.0011 & 0.0017 & 0.0031 & 0.0004 \\
+1  & 0.0024 & 0.0073 & 0.0009 & 0.0017 & 0.0032 & 0.0004 \\
+2  & 0.0025 & 0.0073 & 0.0009 & 0.0019 & 0.0032 & 0.0004 \\
+3  & 0.0024 & 0.0070 & 0.0009 & 0.0017 & 0.0029 & 0.0004 \\
+4  & 0.0029 & 0.0062 & 0.0007 & 0.0016 & 0.0033 & 0.0004 \\
+5  & 0.0029 & 0.0061 & 0.0006 & 0.0017 & 0.0027 & 0.0003 \\
+6  & 0.0028 & 0.0062 & 0.0007 & 0.0016 & 0.0023 & 0.0003 \\
+7  & 0.0031 & 0.0054 & 0.0007 & 0.0020 & 0.0025 & 0.0004 \\
+9  & 0.0032 & 0.0098 & 0.0014 & 0.0007 & 0.0023 & 0.0003 \\
+10 & 0.0035 & 0.0068 & 0.0007 & 0.0017 & 0.0026 & 0.0003 \\
+11 & 0.0054 & 0.0060 & 0.0004 & 0.0029 & 0.0040 & 0.0004 \\
+12 & 0.0063 & 0.0051 & 0.0003 & 0.0038 & 0.0032 & 0.0003 \\
+13 & 0.0074 & 0.0049 & 0.0004 & 0.0042 & 0.0027 & 0.0003 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -869,31 +802,28 @@ the uncorrected MC (``MC''), Method~1 (``M1''), and Method~2 (``M2'').
   c
   S S S
   S S S
-  S S S
 }
 \toprule
 & \multicolumn{3}{c}{$R_\eta$}
-& \multicolumn{3}{c}{$R_\phi$}
-& \multicolumn{3}{c}{$w_{\eta\,2}$} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}\cmidrule(lr){8-10}
+& \multicolumn{3}{c}{$R_\phi$} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
 {$|\eta|$ bin}
-& {MC} & {M1} & {M2}
 & {MC} & {M1} & {M2}
 & {MC} & {M1} & {M2} \\
 \midrule
-0  & 0.0059 & 0.0046 & 0.0005 & 0.0052 & 0.0014 & 0.0006 & 0.0014 & 0.0005 & 0.0003 \\
-1  & 0.0064 & 0.0037 & 0.0005 & 0.0053 & 0.0014 & 0.0006 & 0.0017 & 0.0007 & 0.0004 \\
-2  & 0.0063 & 0.0037 & 0.0005 & 0.0054 & 0.0015 & 0.0006 & 0.0018 & 0.0007 & 0.0004 \\
-3  & 0.0062 & 0.0035 & 0.0004 & 0.0051 & 0.0014 & 0.0005 & 0.0018 & 0.0008 & 0.0004 \\
-4  & 0.0079 & 0.0028 & 0.0006 & 0.0052 & 0.0021 & 0.0003 & 0.0022 & 0.0009 & 0.0006 \\
-5  & 0.0077 & 0.0027 & 0.0005 & 0.0050 & 0.0016 & 0.0003 & 0.0022 & 0.0010 & 0.0006 \\
-6  & 0.0074 & 0.0027 & 0.0005 & 0.0050 & 0.0016 & 0.0004 & 0.0022 & 0.0011 & 0.0007 \\
-7  & 0.0085 & 0.0026 & 0.0008 & 0.0051 & 0.0026 & 0.0006 & 0.0023 & 0.0010 & 0.0006 \\
-9  & 0.0078 & 0.0062 & 0.0004 & 0.0022 & 0.0014 & 0.0002 & 0.0011 & 0.0016 & 0.0007 \\
-10 & 0.0090 & 0.0038 & 0.0004 & 0.0049 & 0.0019 & 0.0003 & 0.0019 & 0.0011 & 0.0007 \\
-11 & 0.0139 & 0.0033 & 0.0010 & 0.0087 & 0.0038 & 0.0004 & 0.0032 & 0.0008 & 0.0007 \\
-12 & 0.0169 & 0.0032 & 0.0010 & 0.0106 & 0.0034 & 0.0005 & 0.0036 & 0.0008 & 0.0007 \\
-13 & 0.0192 & 0.0035 & 0.0010 & 0.0118 & 0.0034 & 0.0005 & 0.0040 & 0.0010 & 0.0008 \\
+0  & 0.0066 & 0.0204 & 0.0028 & 0.0047 & 0.0083 & 0.0012 \\
+1  & 0.0068 & 0.0184 & 0.0024 & 0.0049 & 0.0082 & 0.0011 \\
+2  & 0.0070 & 0.0185 & 0.0024 & 0.0052 & 0.0083 & 0.0011 \\
+3  & 0.0067 & 0.0175 & 0.0023 & 0.0048 & 0.0075 & 0.0010 \\
+4  & 0.0085 & 0.0158 & 0.0017 & 0.0047 & 0.0087 & 0.0011 \\
+5  & 0.0082 & 0.0157 & 0.0018 & 0.0046 & 0.0070 & 0.0009 \\
+6  & 0.0081 & 0.0152 & 0.0018 & 0.0046 & 0.0059 & 0.0009 \\
+7  & 0.0084 & 0.0139 & 0.0016 & 0.0049 & 0.0067 & 0.0010 \\
+9  & 0.0087 & 0.0249 & 0.0032 & 0.0019 & 0.0059 & 0.0007 \\
+10 & 0.0101 & 0.0174 & 0.0017 & 0.0047 & 0.0068 & 0.0008 \\
+11 & 0.0153 & 0.0156 & 0.0011 & 0.0085 & 0.0101 & 0.0009 \\
+12 & 0.0183 & 0.0131 & 0.0009 & 0.0109 & 0.0080 & 0.0009 \\
+13 & 0.0213 & 0.0128 & 0.0009 & 0.0117 & 0.0072 & 0.0008 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -906,18 +836,23 @@ the uncorrected MC (``MC''), Method~1 (``M1''), and Method~2 (``M2'').
 
 Several systematic features are observed in the closure metrics:
 
-\paragraph{Both methods achieve substantial closure.}
-In all $|\eta|$ bins, at all distortion levels, both Method~1 and Method~2
-reduce the $\chi^2/n_\text{df}$ relative to the uncorrected MC. The
-corrections consistently move the reweighted distributions closer to the
-pseudo-data target.
+\paragraph{Method~2 achieves substantial closure; Method~1 does not.}
+In all $|\eta|$ bins, at all distortion levels, Method~2
+reduces the $\chi^2/n_\text{df}$ by a large factor relative to the
+uncorrected MC. Method~1 (flat cell reweighting, §5.1), however, generally increases the
+$\chi^2$ for $R_\eta$ and $R_\phi$, particularly in the barrel
+($|\eta|<1.37$), demonstrating that a single additive constant cannot
+capture the structure of the broadening bias.
 
-\paragraph{Method~2 consistently outperforms Method~1.}
-The energy-dependent profile correction achieves $\chi^2/n_\text{df}$ values
-typically 5--10 times smaller than the flat shift correction. For example, at
-$\delta=0.05$ in $|\eta|$ bin~0, the $R_\eta$ values are: MC~=~0.0059,
-M1~=~0.0046, M2~=~0.0005. The improvement is most dramatic for $R_\eta$,
-which is the variable most sensitive to the lateral energy distribution.
+\paragraph{Method~2 dramatically outperforms Method~1.}
+The energy-dependent cell reweighting achieves $\chi^2/n_\text{df}$ values
+typically one to two orders of magnitude smaller than the flat cell
+reweighting. For example, at $\delta=0.05$ in $|\eta|$ bin~0, the $R_\eta$
+values are: MC~=~0.0066, M1~=~0.0204, M2~=~0.0028. The flat cell
+reweighting actually increases the $\chi^2$ well above the uncorrected MC in
+most barrel bins, while Method~2 consistently reduces it. The contrast is
+most dramatic for $R_\eta$, which is the variable most sensitive to the
+lateral energy distribution.
 
 \paragraph{The residual $\chi^2$ scales sub-linearly with distortion level.}
 The uncorrected MC $\chi^2$ scales approximately quadratically with $\delta$
@@ -936,10 +871,11 @@ correspondingly larger absolute corrections.
 The $|\eta|$ bins adjacent to the barrel--endcap gap (bin~7 at
 $[1.30,1.37)$ and bin~9 at $[1.52,1.60)$) show slightly degraded
 performance. These bins have unusual detector geometry and lower statistics.
-Nevertheless, both methods still achieve significant $\chi^2$ reduction.
+Nevertheless, Method~2 still achieves significant $\chi^2$ reduction in these
+bins, while Method~1 increases the $\chi^2$ here as well.
 
 \paragraph{Consistency across shower shape variables.}
-All three variables ($R_\eta$, $R_\phi$, $w_{\eta\,2}$) show similar patterns
+Both variables ($R_\eta$, $R_\phi$) show similar patterns
 of improvement, confirming that the cell-level correction simultaneously and
 consistently corrects all derived shower shape quantities.
 
@@ -948,12 +884,13 @@ consistently corrects all derived shower shape quantities.
 
 Averaging across $|\eta|$ bins at $\delta=0.05$:
 \begin{itemize}
-  \item \textbf{Method~1} reduces the $R_\eta$ $\chi^2/n_\text{df}$ by
-    approximately 50--80\% relative to uncorrected MC.
+  \item \textbf{Method~1} generally increases the $R_\eta$ and $R_\phi$
+    $\chi^2/n_\text{df}$ relative to uncorrected MC in barrel bins; only in
+    the most forward endcap bins ($|\eta|>2.0$) does it provide modest
+    improvement.
   \item \textbf{Method~2} reduces the $R_\eta$ $\chi^2/n_\text{df}$ by
-    approximately 90--95\% relative to uncorrected MC.
-  \item Similar reduction factors are observed for $R_\phi$ and
-    $w_{\eta\,2}$.
+    approximately 60--95\% relative to uncorrected MC.
+  \item Similar patterns are observed for $R_\phi$.
 \end{itemize}
 
 % ============================================================================
@@ -966,24 +903,24 @@ MC23e $Z\to ee\gamma$ simulated events, validating the procedure for
 correcting photon shower shape variables in the ATLAS electromagnetic
 calorimeter.
 
-The test demonstrates that both correction methods — a flat additive shift per
-cell and an energy-dependent profile correction — successfully recover the
-target pseudo-data distributions across all 13~populated $|\eta|$ bins and
-three distortion levels. The energy-dependent correction (Method~2) achieves
-consistently superior performance, reducing the $\chi^2/n_\text{df}$ by
-approximately 90--95\% relative to uncorrected MC, compared to 50--80\% for
-the flat shift (Method~1).
+The test demonstrates that the energy-dependent cell reweighting (Method~2, §5.2)
+successfully recovers the target pseudo-data distributions across all
+13~populated $|\eta|$ bins and three distortion levels. The flat cell reweighting
+(Method~1, §5.1) generally increases the $\chi^2$ in barrel bins,
+demonstrating that a single additive constant cannot capture the structure of
+the broadening bias. Method~2 achieves consistently superior performance,
+reducing the $\chi^2/n_\text{df}$ by approximately 60--95\% relative to
+uncorrected MC.
 
 The method is robust across the full pseudorapidity range of the
 electromagnetic calorimeter ($|\eta|<2.4$, excluding the transition region
 $1.37<|\eta|<1.52$), across three different distortion magnitudes (1\%, 3\%,
-5\%), and for all three shower shape variables tested ($R_\eta$, $R_\phi$,
-$w_{\eta\,2}$).
+5\%), and for both shower shape variables tested ($R_\eta$, $R_\phi$).
 
 These results confirm that the cell-energy reweighting method is a viable
 approach for correcting data--MC shower shape discrepancies and that the
-energy-dependent parameterisation provides a significant improvement over the
-flat-shift baseline. The closure test provides the necessary validation to
+energy-dependent cell reweighting (\S5.2) provides a significant improvement over the
+flat cell reweighting (\S5.1) baseline. The closure test provides the necessary validation to
 proceed with the application of the method to real ATLAS data, where
 corrections would be derived by comparing data and MC in a suitable control
 region.
@@ -997,7 +934,7 @@ region.
 
 This appendix presents the full set of closure plots for all shower shape
 variables, all $|\eta|$~bins, and all distortion levels. For each $|\eta|$
-bin, the three shower shape variables ($R_\eta$, $R_\phi$, $w_{\eta\,2}$)
+bin, the two shower shape variables ($R_\eta$, $R_\phi$)
 are shown side by side. Each plot uses the same two-panel format described in
 \cref{sec:results:representative}: an upper panel overlaying the normalised
 distributions (pseudo-data, MC, Method~1, Method~2) and a lower panel showing
@@ -1006,24 +943,20 @@ the ratio to pseudo-data.
 Bin~8 ($|\eta|\in[1.37,1.52)$) corresponds to the barrel--endcap transition
 region and is empty.
 
-% --- Helper command for one eta-bin row (3 subfigs) -------------------------
+% --- Helper command for one eta-bin row (2 subfigs) -------------------------
 \newcommand{\closurerow}[3]{%
   % #1 = distortion dir (e.g. closure_test_5pct)
   % #2 = page number in the multi-page PDF
   % #3 = eta label (e.g. $|\eta|\in[0.00,\,0.20)$)
   \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[t]{0.32\textwidth}
+    \begin{subfigure}[t]{0.48\textwidth}
       \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_reta.pdf}
       \caption{$R_\eta$}
     \end{subfigure}\hfill
-    \begin{subfigure}[t]{0.32\textwidth}
+    \begin{subfigure}[t]{0.48\textwidth}
       \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_rphi.pdf}
       \caption{$R_\phi$}
-    \end{subfigure}\hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-      \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_weta2.pdf}
-      \caption{$w_{\eta\,2}$}
     \end{subfigure}
     \caption{Closure plots for #3.}
   \end{figure}

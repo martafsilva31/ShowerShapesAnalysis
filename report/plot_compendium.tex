@@ -14,6 +14,7 @@
 \usepackage{hyperref}
 \usepackage{cleveref}
 \usepackage{float}
+\usepackage{xcolor}
 \usepackage{fancyhdr}
 
 % --- Page style -------------------------------------------------------------
@@ -38,17 +39,36 @@
   % #3 = caption text
   \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[t]{0.32\textwidth}
+    \begin{subfigure}[t]{0.48\textwidth}
       \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_reta.pdf}
       \caption{$R_\eta$}
     \end{subfigure}\hfill
-    \begin{subfigure}[t]{0.32\textwidth}
+    \begin{subfigure}[t]{0.48\textwidth}
       \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_rphi.pdf}
       \caption{$R_\phi$}
+    \end{subfigure}
+    \caption{#3}
+  \end{figure}
+}
+
+% --- Helper command for distortion-level comparison row -------------------
+\newcommand{\comprow}[3]{%
+  % #1 = PDF filename stem (e.g. closure_reta)
+  % #2 = page number in the multi-page PDF
+  % #3 = caption text
+  \begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.32\textwidth}
+      \includegraphics[page=#2,width=\textwidth]{../output/closure_test_1pct/#1.pdf}
+      \caption{$\delta = 1\%$}
     \end{subfigure}\hfill
     \begin{subfigure}[t]{0.32\textwidth}
-      \includegraphics[page=#2,width=\textwidth]{../output/#1/closure_weta2.pdf}
-      \caption{$w_{\eta\,2}$}
+      \includegraphics[page=#2,width=\textwidth]{../output/closure_test_3pct/#1.pdf}
+      \caption{$\delta = 3\%$}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+      \includegraphics[page=#2,width=\textwidth]{../output/closure_test_5pct/#1.pdf}
+      \caption{$\delta = 5\%$}
     \end{subfigure}
     \caption{#3}
   \end{figure}
@@ -76,8 +96,8 @@
 \label{sec:validation}
 % ============================================================================
 
-These plots validate the cell-level recomputation of the three shower shape
-variables ($R_\eta$, $R_\phi$, $w_{\eta\,2}$) against the stored values in
+These plots validate the cell-level recomputation of the two shower shape
+variables ($R_\eta$, $R_\phi$) against the stored values in
 the ntuples. Each figure shows three normalised distributions:
 \textbf{Unfudged/stored} (blue) — the original MC stored values;
 \textbf{Fudged/stored} (red) — the ``fudged'' stored values; and
@@ -92,20 +112,16 @@ correct cell-level recomputation.
 
 \begin{figure}[htbp]
   \centering
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[width=\textwidth]{../output/plots/reta_Zeeg.pdf}
     \caption{$R_\eta$}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[width=\textwidth]{../output/plots/rphi_Zeeg.pdf}
     \caption{$R_\phi$}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
-    \includegraphics[width=\textwidth]{../output/plots/weta2_Zeeg.pdf}
-    \caption{$w_{\eta\,2}$}
   \end{subfigure}
   \caption{Shower shape validation for the $Z\to ee\gamma$ channel.
-    Normalised distributions of all three variables comparing stored
+    Normalised distributions of $R_\eta$ and $R_\phi$ comparing stored
     (Unfudged, Fudged) and cell-recomputed values. The ratio panel confirms
     that the cell-level recomputation reproduces the stored values.}
   \label{fig:val:zeeg}
@@ -117,17 +133,13 @@ correct cell-level recomputation.
 
 \begin{figure}[htbp]
   \centering
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[width=\textwidth]{../output/plots/reta_Zmumug.pdf}
     \caption{$R_\eta$}
   \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
+  \begin{subfigure}[t]{0.48\textwidth}
     \includegraphics[width=\textwidth]{../output/plots/rphi_Zmumug.pdf}
     \caption{$R_\phi$}
-  \end{subfigure}\hfill
-  \begin{subfigure}[t]{0.32\textwidth}
-    \includegraphics[width=\textwidth]{../output/plots/weta2_Zmumug.pdf}
-    \caption{$w_{\eta\,2}$}
   \end{subfigure}
   \caption{Shower shape validation for the $Z\to\mu\mu\gamma$ channel.
     Same format as \cref{fig:val:zeeg}. The $Z\to\mu\mu\gamma$ sample
@@ -142,7 +154,7 @@ correct cell-level recomputation.
 % ============================================================================
 
 Closure test results with a 5\% uniform distortion applied to all Layer-2 cell
-energies. Each figure shows one $|\eta|$ bin with all three shower shape
+energies. Each figure shows one $|\eta|$ bin with both shower shape
 variables side by side. Upper panels: normalised distributions of pseudo-data,
 uncorrected MC, Method~1 (flat shift), and Method~2 (TProfile). Lower panels:
 ratio to pseudo-data.
@@ -206,5 +218,52 @@ Closure test results with a 1\% uniform distortion. Same format as
 \closurerow{closure_test_1pct}{11}{$|\eta|\in[1.80,\,2.00)$, $\delta=0.01$.}
 \closurerow{closure_test_1pct}{12}{$|\eta|\in[2.00,\,2.20)$, $\delta=0.01$.}
 \closurerow{closure_test_1pct}{13}{$|\eta|\in[2.20,\,2.40)$, $\delta=0.01$.}
+
+\clearpage
+% ============================================================================
+\section{Distortion Level Comparison}
+\label{sec:comparison}
+% ============================================================================
+
+Each figure shows the three distortion levels (1\%, 3\%, 5\%) side by side
+for the same $|\eta|$ bin. This allows direct assessment of how correction
+performance scales with distortion magnitude.
+
+% ---------- 4.1  R_eta ------------------------------------------------------
+\subsection{$R_\eta$}
+\label{sec:comparison:reta}
+
+\comprow{closure_reta}{1}{$R_\eta$, $|\eta|\in[0.00,\,0.20)$.}
+\comprow{closure_reta}{2}{$R_\eta$, $|\eta|\in[0.20,\,0.40)$.}
+\comprow{closure_reta}{3}{$R_\eta$, $|\eta|\in[0.40,\,0.60)$.}
+\comprow{closure_reta}{4}{$R_\eta$, $|\eta|\in[0.60,\,0.80)$.}
+\comprow{closure_reta}{5}{$R_\eta$, $|\eta|\in[0.80,\,1.00)$.}
+\comprow{closure_reta}{6}{$R_\eta$, $|\eta|\in[1.00,\,1.20)$.}
+\comprow{closure_reta}{7}{$R_\eta$, $|\eta|\in[1.20,\,1.30)$.}
+\comprow{closure_reta}{8}{$R_\eta$, $|\eta|\in[1.30,\,1.37)$.}
+\comprow{closure_reta}{9}{$R_\eta$, $|\eta|\in[1.52,\,1.60)$.}
+\comprow{closure_reta}{10}{$R_\eta$, $|\eta|\in[1.60,\,1.80)$.}
+\comprow{closure_reta}{11}{$R_\eta$, $|\eta|\in[1.80,\,2.00)$.}
+\comprow{closure_reta}{12}{$R_\eta$, $|\eta|\in[2.00,\,2.20)$.}
+\comprow{closure_reta}{13}{$R_\eta$, $|\eta|\in[2.20,\,2.40)$.}
+
+\clearpage
+% ---------- 4.2  R_phi ------------------------------------------------------
+\subsection{$R_\phi$}
+\label{sec:comparison:rphi}
+
+\comprow{closure_rphi}{1}{$R_\phi$, $|\eta|\in[0.00,\,0.20)$.}
+\comprow{closure_rphi}{2}{$R_\phi$, $|\eta|\in[0.20,\,0.40)$.}
+\comprow{closure_rphi}{3}{$R_\phi$, $|\eta|\in[0.40,\,0.60)$.}
+\comprow{closure_rphi}{4}{$R_\phi$, $|\eta|\in[0.60,\,0.80)$.}
+\comprow{closure_rphi}{5}{$R_\phi$, $|\eta|\in[0.80,\,1.00)$.}
+\comprow{closure_rphi}{6}{$R_\phi$, $|\eta|\in[1.00,\,1.20)$.}
+\comprow{closure_rphi}{7}{$R_\phi$, $|\eta|\in[1.20,\,1.30)$.}
+\comprow{closure_rphi}{8}{$R_\phi$, $|\eta|\in[1.30,\,1.37)$.}
+\comprow{closure_rphi}{9}{$R_\phi$, $|\eta|\in[1.52,\,1.60)$.}
+\comprow{closure_rphi}{10}{$R_\phi$, $|\eta|\in[1.60,\,1.80)$.}
+\comprow{closure_rphi}{11}{$R_\phi$, $|\eta|\in[1.80,\,2.00)$.}
+\comprow{closure_rphi}{12}{$R_\phi$, $|\eta|\in[2.00,\,2.20)$.}
+\comprow{closure_rphi}{13}{$R_\phi$, $|\eta|\in[2.20,\,2.40)$.}
 
 \end{document}

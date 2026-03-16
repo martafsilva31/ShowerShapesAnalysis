@@ -72,42 +72,7 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 | Repo | Path | Remote | Purpose |
 |------|------|--------|---------|
 | NTupleMaker | `../NTupleMaker_workspace/source/NTupleMaker/` | `gitlab.cern.ch/femarta/cellntuplemaker` | Athena C++ algorithm producing cell-level ntuples |
-| showershapereweighting | `../showershapereweighting/` | `gitlab.cern.ch/mobelfki/showershapereweighting` | Supervisor's correction method (CalCoef.C, NTUP.C) + MC23e closure test macros |
-
-### MC23e Closure Test Macros (in `showershapereweighting/`)
-
-New C++ ROOT macros for testing the cell-energy reweighting method on MC23e ntuples:
-
-| File | Purpose |
-|------|---------|
-| `config_mc23e.h` | Shared header: MC23e branch names, cluster geometry, η binning (14 bins), Energy/calcReta/calcRphi/calcWeta2 helpers (vector<double>), distortion parameters |
-| `create_pseudodata.C` | Two-pass macro: computes per-cell mean normalised energy, applies shift+stretch distortions, writes new ntuple preserving all branches |
-| `derive_corrections_mc23e.C` | Derives shift+stretch corrections (ATL-COM-PHYS-2021-640 Eq. 22) using Welford's online algorithm for mean/RMS |
-| `apply_corrections_mc23e.C` | Applies derived corrections to MC, writes reweighted ntuple |
-| `validate_closure.C` | Overlay+ratio plots (R_eta, R_phi, w_eta_2) for original MC / pseudo-data / reweighted MC; chi2/ndf closure metric |
-
-**Pipeline**:
-```bash
-# Setup ROOT
-lsetup "root 6.32.08-x86_64-el9-gcc13-opt"
-cd QT/ShowerShapes/showershapereweighting/
-NTUPLE=../ShowerShapesAnalysis/ntuples/mc23e/mc23e_700770_Zeeg.root
-
-# 1. Create pseudo-data (known distortions)
-root -l -b -q "create_pseudodata.C(\"$NTUPLE\", \"pseudo.root\")"
-# 2. Derive corrections
-root -l -b -q "derive_corrections_mc23e.C(\"$NTUPLE\", \"pseudo.root\", \"corrections.root\")"
-# 3. Apply corrections
-root -l -b -q "apply_corrections_mc23e.C(\"$NTUPLE\", \"corrections.root\", \"reweighted.root\")"
-# 4. Validate (produces PDF)
-root -l -b -q "validate_closure.C(\"$NTUPLE\", \"pseudo.root\", \"reweighted.root\", \"closure.pdf\")"
-```
-All macros accept an optional last argument `maxEvents` for quick testing (e.g., add `, 50000` before the closing `)`).
-
-**Key design notes**:
-- Works with MC23e branch format (`photon.X`, `photon_cluster.X`, `vector<double>` cells)
-- Distortion is applied in normalised space (e_i/E_total), then renormalised to preserve cluster energy
-- The renormalisation step creates non-trivial interactions (cell 38 contributes ~42% of total energy), so derived corrections won't numerically match injected distortions — but the closure in shower shape space (R_eta, R_phi, w_eta_2) is excellent (chi2/ndf << 1)
+| showershapereweighting | `../showershapereweighting/` | `gitlab.cern.ch/mobelfki/showershapereweighting` | Supervisor's Run 2 correction method (CalCoef.C, NTUP.C) |
 
 ---
 
