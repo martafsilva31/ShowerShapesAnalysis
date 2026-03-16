@@ -50,11 +50,14 @@ def main():
 
     tree.SetBranchStatus("*", 0)
     tree.SetBranchStatus("photon.7x11ClusterLr2E", 1)
+    tree.SetBranchStatus("photon.7x11ClusterLr2Eta", 1)
     tree.SetBranchStatus("photon.rphi", 1)
     tree.SetBranchStatus("photon.unfudged_rphi", 1)
 
     cell_vec = ROOT.std.vector('double')()
+    eta_vec  = ROOT.std.vector('double')()
     tree.SetBranchAddress("photon.7x11ClusterLr2E", cell_vec)
+    tree.SetBranchAddress("photon.7x11ClusterLr2Eta", eta_vec)
 
     h_fudged = ROOT.TH1F("h_rphi_fudged", ";R_{#phi};Events", 100, 0.5, 1.05)
     h_unfudged = ROOT.TH1F("h_rphi_unfudged", ";R_{#phi};Events", 100, 0.5, 1.05)
@@ -74,10 +77,17 @@ def main():
     leaf_fudged = tree.GetLeaf("photon.rphi")
     leaf_unfudged = tree.GetLeaf("photon.unfudged_rphi")
 
+    n_skipped_coverage = 0
     for i in range(max_ev):
         tree.GetEntry(i)
 
         if cell_vec.size() != 77:
+            continue
+
+        # Skip events with incomplete grid coverage (missing calorimeter cells)
+        nz = sum(1 for j in range(77) if not (cell_vec[j] == 0.0 and eta_vec[j] == 0.0))
+        if nz != 77:
+            n_skipped_coverage += 1
             continue
 
         rphi_comp = ROOT.compute_rphi_cpp(cell_vec)
@@ -110,6 +120,7 @@ def main():
     print(f"R_PHI SUMMARY — {sample}")
     print(f"{'='*60}")
     print(f"Events analyzed: {n_good}")
+    print(f"Events skipped (incomplete grid): {n_skipped_coverage}")
 
     diff_cu = arr_computed - arr_unfudged
     print(f"\nComputed vs Unfudged:")
