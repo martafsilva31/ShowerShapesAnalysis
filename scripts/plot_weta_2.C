@@ -6,6 +6,7 @@
 
 #include "TFile.h"
 #include "TH1F.h"
+#include "TH2F.h"
 #include "TCanvas.h"
 #include "TPad.h"
 #include "TLegend.h"
@@ -64,7 +65,7 @@ void plot_weta_2(const char* infile  = "../output/weta2_Zeeg.root",
     h_fudged->Draw("HIST SAME");
     h_computed->Draw("HIST SAME");
 
-    TLegend* leg = new TLegend(0.16, 0.05, 0.50, 0.25);
+    TLegend* leg = new TLegend(0.55, 0.05, 0.89, 0.25);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextSize(0.045);
@@ -77,14 +78,14 @@ void plot_weta_2(const char* infile  = "../output/weta2_Zeeg.root",
     lat.SetNDC();
     lat.SetTextSize(0.055);
     lat.SetTextFont(72);
-    lat.DrawLatex(0.55, 0.84, "ATLAS");
+    lat.DrawLatex(0.20, 0.84, "ATLAS");
     lat.SetTextFont(42);
-    lat.DrawLatex(0.67, 0.84, "Internal");
-    lat.SetTextSize(0.040);
+    lat.DrawLatex(0.32, 0.84, "Internal");
+    lat.SetTextSize(0.045);
     TString sampleLatex = sample;
-    if (sample == "Zeeg")   sampleLatex = "Z#rightarrowee#gamma";
-    if (sample == "Zmumug") sampleLatex = "Z#rightarrow#mu#mu#gamma";
-    lat.DrawLatex(0.55, 0.78, Form("MC23e %s, #sqrt{s} = 13.6 TeV", sampleLatex.Data()));
+    if (sample.Contains("Zeeg"))   sampleLatex = "Z#rightarrowee#gamma";
+    if (sample.Contains("Zmumug")) sampleLatex = "Z#rightarrow#mu#mu#gamma";
+    lat.DrawLatex(0.20, 0.78, Form("MC23e %s, #sqrt{s} = 13.6 TeV", sampleLatex.Data()));
 
     c->cd();
     TPad* pad2 = new TPad("pad2", "", 0, 0, 1, 0.3);
@@ -123,5 +124,46 @@ void plot_weta_2(const char* infile  = "../output/weta2_Zeeg.root",
 
     c->SaveAs(Form("%s.pdf", outbase));
     std::cout << "Saved: " << outbase << ".pdf\n";
+
+    // --- Residual distributions ---
+    auto* hd_computed = (TH1F*)f->Get("h_weta2_diff_computed_unfudged");
+    auto* hd_fudged   = (TH1F*)f->Get("h_weta2_diff_fudged_unfudged");
+
+    if (hd_computed) {
+        TCanvas* c2 = new TCanvas("c2", "", 700, 500);
+        c2->SetLeftMargin(0.14);
+        c2->SetLogy();
+
+        hd_computed->SetTitle("");
+        hd_computed->SetLineColor(kGreen+2); hd_computed->SetLineWidth(2); hd_computed->SetLineStyle(2);
+        hd_fudged->SetTitle("");
+        hd_fudged->SetLineColor(kRed);      hd_fudged->SetLineWidth(2);
+
+        hd_computed->Scale(1.0 / hd_computed->Integral());
+        hd_fudged->Scale(1.0 / hd_fudged->Integral());
+
+        hd_computed->GetXaxis()->SetTitle("#Delta w_{#eta_{2}} (method #minus unfudged)");
+        hd_computed->GetYaxis()->SetTitle("Normalised");
+        hd_computed->GetYaxis()->SetTitleOffset(1.2);
+        hd_computed->Draw("HIST");
+        hd_fudged->Draw("HIST SAME");
+
+        TLegend* leg2 = new TLegend(0.55, 0.70, 0.88, 0.88);
+        leg2->SetBorderSize(0);
+        leg2->SetFillStyle(0);
+        leg2->SetTextSize(0.035);
+        leg2->AddEntry(hd_computed, Form("Computed (std=%.5f)", hd_computed->GetStdDev()), "l");
+        leg2->AddEntry(hd_fudged,   Form("Fudged (std=%.5f)",   hd_fudged->GetStdDev()), "l");
+        leg2->Draw();
+
+        TLatex lat2;
+        lat2.SetNDC(); lat2.SetTextSize(0.040);
+        lat2.SetTextFont(72); lat2.DrawLatex(0.16, 0.84, "ATLAS");
+        lat2.SetTextFont(42); lat2.DrawLatex(0.28, 0.84, "Internal");
+
+        c2->SaveAs(Form("%s_residuals.pdf", outbase));
+        std::cout << "Saved: " << outbase << "_residuals.pdf\n";
+    }
+
     f->Close();
 }
