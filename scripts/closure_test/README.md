@@ -23,10 +23,10 @@ where:
 - $b_k$ is a **fixed bias pattern** based on Chebyshev distance from the central cell:
   | Distance | Bias $b_k$ | Region |
   |----------|-----------|--------|
-  | 0        | +1.0      | Central cell |
-  | 1        | +0.4      | 1st ring |
-  | 2        | −0.4      | 2nd ring |
-  | ≥3       | −1.0      | Outer cells |
+  | 0        | −1.0      | Central cell |
+  | 1        | −0.4      | 1st ring |
+  | 2        | +0.4      | 2nd ring |
+  | ≥3       | +1.0      | Outer cells |
 - $\mathcal{G}(0, \sigma)$ is **per-event per-cell Gaussian noise** with $\sigma = \delta/2$
 
 After scaling, total cluster energy is conserved:
@@ -35,8 +35,9 @@ $$
 e'_k \leftarrow e'_k \cdot \frac{E_\text{tot}}{\sum_j e'_j}
 $$
 
-This creates narrower showers (enhanced centre, suppressed edges), mimicking
-typical data–MC differences observed in ATLAS calorimetry.
+This creates broader showers (suppressed centre, enhanced edges), mimicking
+the standard ATLAS data–MC difference: MC produces narrower showers than data,
+so fudge factors broaden MC to match data.
 
 ### 2. Correction derivation (`derive_corrections.C`)
 

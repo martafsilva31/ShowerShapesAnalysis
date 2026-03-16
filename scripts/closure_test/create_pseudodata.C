@@ -10,8 +10,9 @@
 //   e'_k = e_k * (1 + distortionLevel * biasPattern_k + Gaus(0, noiseSigma))
 //   e'_k *= E_total / sum(e'_j)   (conserve cluster energy)
 //
-// biasPattern_k = +1 (central), +0.4 (ring1), -0.4 (ring2), -1.0 (outer)
-//   => narrower showers, mimicking typical data-MC differences.
+// biasPattern_k = -1 (central), -0.4 (ring1), +0.4 (ring2), +1.0 (outer)
+//   => broader showers, mimicking the standard ATLAS data-MC difference
+//      (MC has narrower showers than data; fudge factors broaden MC).
 //
 // distortionLevel  controls the systematic bias magnitude.
 // noiseSigma       controls random event-by-event scatter (default: level/2).
@@ -88,7 +89,7 @@ int create_pseudodata(const char* inputFile,
     std::cout << "  Systematic bias level: " << distortionLevel << std::endl;
     std::cout << "  Random noise sigma:    " << noiseSigma << std::endl;
     std::cout << "  Formula: e' = e * (1 + " << distortionLevel << "*bias_k + Gaus(0," << noiseSigma << "))" << std::endl;
-    std::cout << "  Bias pattern: center=+1, ring1=+0.4, ring2=-0.4, outer=-1" << std::endl;
+    std::cout << "  Bias pattern: center=-1, ring1=-0.4, ring2=+0.4, outer=+1" << std::endl;
 
     // ======================================================================
     // Create output

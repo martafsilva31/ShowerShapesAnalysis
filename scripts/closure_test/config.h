@@ -62,11 +62,14 @@ namespace closure {
     // ======================================================================
     // Systematic distortion pattern for pseudo-data generation
     // ======================================================================
-    // Mimics typical data-MC differences: data has narrower showers, so
-    // central cells are enhanced and outer cells suppressed.
+    // Mimics the standard ATLAS data-MC difference: MC produces narrower
+    // showers than data. Fudge factors broaden MC to match data, meaning
+    // Δk = f_k^data − f_k^MC is negative for central cells and positive
+    // for outer cells. The pseudo-data therefore has suppressed central
+    // cells and enhanced outer cells (broader showers than MC).
     // Returns a base bias in [-1, +1] that is scaled by distortionLevel.
     //
-    // Pattern:  center -> +1, ring1 -> +0.4, ring2 -> -0.4, outer -> -1.0
+    // Pattern:  center -> -1, ring1 -> -0.4, ring2 -> +0.4, outer -> +1.0
     // Usage:    e'_k = e_k * (1 + level*getBiasPattern(k) + Gaus(0, noiseSigma))
     // ======================================================================
     inline double getBiasPattern(int cellIdx) {
@@ -76,10 +79,10 @@ namespace closure {
         int dphi = std::abs(phi_col - 5);
         int dist = std::max(deta, dphi);      // Chebyshev distance from center
 
-        if (dist == 0) return +1.0;   // central cell
-        if (dist == 1) return +0.4;   // first ring
-        if (dist == 2) return -0.4;   // second ring
-        return -1.0;                  // outer cells
+        if (dist == 0) return -1.0;   // central cell
+        if (dist == 1) return -0.4;   // first ring
+        if (dist == 2) return +0.4;   // second ring
+        return +1.0;                  // outer cells
     }
 
     // ======================================================================
