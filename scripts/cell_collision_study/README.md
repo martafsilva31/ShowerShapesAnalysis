@@ -1,4 +1,4 @@
-# Cell Collision Study — Layer 2 (7×11 Grid)
+I# Cell Collision Study — Layer 2 (7×11 Grid)
 
 Answers to supervisor's questions about cell collisions in the
 CaloFillRectangularCluster 7×11 grid output.
