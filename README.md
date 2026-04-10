@@ -24,11 +24,14 @@ ShowerShapesAnalysis/
 │   │   ├── plot_closure.C
 │   │   ├── run_closure_test.sh
 │   │   └── run_closure_suite.sh
-│   └── data_mc/               # Data-MC comparison + reweighting
-│       ├── compute_and_compare.C   # Initial data-vs-MC comparison
-│       ├── validate_data_mc.C      # Validation (4 samples, chi²)
-│       ├── plot_data_mc.C          # Final overlay plots
-│       └── run_data_mc.sh          # Driver script (6-step pipeline)
+│   └── data_mc/               # Data-MC cell-energy reweighting (current)
+│       ├── config.h                # Shared config: cuts, branches, geometry, formulas
+│       ├── fill_histograms.C       # Two-pass pipeline: accumulate → correct → fill
+│       ├── plot_shower_shapes.C    # Shower shape plots: validation, fudge, comparison, per-eta
+│       ├── plot_cell_profiles.C    # 7×11 cell heatmaps + correction vector plots
+│       ├── extract_chi2.C          # Extract chi-squared tables → report/chi2_*.tex
+│       ├── run.sh                  # Driver: compile, run fill + plot scripts
+│       └── old/                    # Archived previous-iteration scripts
 ├── grid/               # Grid submission scripts (pathena)
 │   ├── samples/        # Sample lists (dataset names)
 │   ├── download_ntuples.sh    # Download + merge ntuples from grid
@@ -41,13 +44,23 @@ ShowerShapesAnalysis/
 │   ├── data24/         # Data 2024
 │   └── mc23e/          # MC23e (Zeeg 13 GB, Zmumug 23 GB)
 ├── output/             # Computed histograms + plots (gitignored)
-│   ├── *.root          # Histogram ROOT files from compute scripts
-│   ├── plots/          # PDF plots from ROOT macros
-│   └── data_mc_comparison/  # Data-MC pipeline output
+│   ├── old/            # Archived output from previous iteration
+│   └── cell_energy_reweighting_Francisco_method/
+│       └── data24/{channel}/{scenario}/
+│           ├── histograms.root
+│           └── plots/  # 30 PDF comparison plots
 ├── report/             # Reports and documentation
 │   ├── egam3_problem_report.md       # DAOD_EGAM3 problem analysis
 │   ├── weta2_investigation_summary.md # w_eta_2 study summary
-│   └── data_mc_comparison_report.tex  # Data-MC comparison report
+│   ├── data_mc_comparison_report.tex  # Data-MC comparison report
+│   ├── closure_test_report.tex        # MC closure test report
+│   ├── software_documentation.tex     # General software documentation
+│   ├── data_mc_reweighting_report.tex # Old report: TProfile M2 investigation
+│   ├── data_mc_software_doc.tex       # Software doc: cell reweighting pipeline
+│   ├── cell_reweighting_report.tex    # Physics report: M1/M2 pipeline (current)
+│   ├── chi2_yields.tex               # Auto-generated event yield table
+│   ├── chi2_summary.tex              # Auto-generated chi-squared summary
+│   └── chi2_tables.tex               # Auto-generated per-eta chi-squared tables
 └── setup.sh            # Environment setup
 ```
 
@@ -82,15 +95,70 @@ cd scripts/closure_test
 
 See `scripts/closure_test/README.md` for full documentation.
 
-## Data-MC Comparison Pipeline
+## Data-MC Comparison Pipeline (Legacy)
+
+Previous-iteration scripts that compared data and MC shower shapes at three
+selection levels. These scripts have been archived to `scripts/data_mc/old/`
+and superseded by the cell-energy reweighting pipeline above.
+
+## Cell-Energy Reweighting Pipeline (Data vs MC)
+
+Derives and applies per-cell energy corrections to photon shower shapes
+(R_eta, R_phi, w_eta_2) using two methods:
+- **M1 (flat shift)**: $E'_k = E_k + \Delta_k \times E_\mathrm{total}$
+- **M2 (shift+stretch)**: $E'_k = E_\mathrm{total} \times \mathrm{shift}_k + \mathrm{stretch}_k \times E_k$
+
+M2 is equivalent to Francisco's `photoncellbasedrw` method.
+
+**Channels**: `eegamma` (Z→eeγ), `mumugamma` (Z→μμγ), `llgamma` (combined)
+**Conversion scenarios**: `baseline` (unconverted), `converted`, `all_conv` (inclusive)
+
+Selection: pT > 10 GeV, |η| < 2.37, crack excluded, loose isolation,
+mll ∈ [40, 83] GeV, mllg ∈ [80, 100] GeV, ΔR(lep, γ) > 0.4.
+MC weight: w = w_MC × w_μ × σ.
+
+**Architecture**: Two-pass C++ pipeline compiled as standalone executable.
+Pass 1 accumulates data/MC cell statistics, computes corrections.
+Pass 2 applies M1 and M2 corrections and fills comparison histograms.
 
 ```bash
-# Download ntuples from completed grid jobs
-cd grid && ./download_ntuples.sh && cd ..
+# Set up ROOT
+export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
+source ${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh --quiet
+asetup Athena,25.0.40 --quiet
 
-# Run the full pipeline (compute, derive corrections, apply, validate, plot)
-cd scripts/data_mc && ./run_data_mc.sh
+# Run single channel/scenario
+cd scripts/data_mc
+./run.sh eegamma baseline
+
+# Run all 9 combinations (3 channels × 3 scenarios)
+./run.sh --batch
+
+# Plot-only (reuses existing histograms.root)
+./run.sh eegamma baseline --plot-only
+
+# Extract chi-squared tables for the report
+root -l -b -q 'extract_chi2.C'
 ```
+
+Output: `output/cell_energy_reweighting_Francisco_method/data24/{channel}/{scenario}/`
+containing `histograms.root` and `plots/` directory.
+
+**Scenario matrix** (all 9 combinations):
+
+| Channel | baseline | converted | all_conv |
+|---------|:--------:|:---------:|:--------:|
+| eegamma | ✅ 78K data / 956K MC | ✅ 16K / 240K | ✅ 94K / 1.2M |
+| mumugamma | ✅ 127K / 1.8M | ✅ 29K / 516K | ✅ 156K / 2.4M |
+| llgamma | ✅ 205K / 2.8M | ✅ 46K / 756K | ✅ 251K / 3.5M |
+
+PDFs produced per scenario:
+- `rew_{reta,rphi,weta2}.pdf` — SET B: cell-computed Data vs MC, M1, M2 (13 pages/eta)
+- `computed_vs_stored.pdf` — cell-computed vs branch validation
+- `fudge_factors.pdf` — SET A: Data vs MC unfudged vs fudged
+- `cell_{data,mc,mc_m1,mc_m2}.pdf` — 7×11 cell fraction heatmaps
+- `cell_shift.pdf`, `cell_stretch.pdf` — M2 correction vectors
+- `cell_profiles_*.pdf` — before/after heatmap comparisons (baseline only)
 
 ## Grid Submission
 
@@ -151,8 +219,21 @@ These files are automatically picked up by GitHub Copilot in VS Code.
 - [x] w_eta_2 comparison plot (compute + fudged/unfudged overlay)
 - [x] MC closure test pipeline (cell-energy reweighting)
 - [x] Data-MC comparison pipeline
+- [x] Cell-energy reweighting pipeline (M1/M2/M3 methods)
+- [x] Isolation cut study (4 variants: no_iso, iso_tight, iso_track, iso_full)
+- [x] Sigma ratio capping for M3 method
+- [x] M2 TProfile binning fix (physical range [0, 0.5])
+- [x] Stored-vs-computed shower shape validation plots
+- [x] Per-method cell energy residual plots
+- [x] Physics report (data_mc_reweighting_report.tex — TProfile investigation)
+- [x] Software documentation (data_mc_software_doc.tex)
 - [x] Add L2 cell eta/phi branches to NTupleMaker
 - [x] Grid production v3 (task 49065711, 35M events, AODs with L2 eta/phi branches)
+- [x] MC weight fix (3-arg: mcwgt × muwgt × xsec)
+- [x] Batch mode: 3 channels × 3 conversion scenarios = 9 runs
+- [x] Chi-squared extraction macro (extract_chi2.C)
+- [x] Physics report (cell_reweighting_report.tex — M1/M2 pipeline)
+- [ ] Binning strategy studies (pT×η, coarse η, hit-position λ, quadrant)
+- [ ] ML approaches (normalising flows, quantile regression)
 - [ ] Download v3 grid output and run analysis
 - [ ] Resolve w_eta_2 computation discrepancy (see report/weta2_investigation_summary.md)
-- [ ] Apply Francisco's shower shape reweighting correction

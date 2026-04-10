@@ -40,11 +40,13 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   │   ├── plot_closure.C
 │   │   ├── run_closure_test.sh
 │   │   └── run_closure_suite.sh
-│   └── data_mc/               # Data-MC comparison + reweighting pipeline
-│       ├── compute_and_compare.C
-│       ├── validate_data_mc.C
-│       ├── plot_data_mc.C
-│       └── run_data_mc.sh
+│   └── data_mc/               # Data-MC cell-energy reweighting pipeline (current)
+│       ├── config.h           # Shared config: cuts, branches, geometry, formulas
+│       ├── fill_histograms.C  # Two-pass pipeline: accumulate → correct → fill
+│       ├── plot_shower_shapes.C # Shower shape plots: validation, fudge, comparison, per-eta
+│       ├── plot_cell_profiles.C # 7×11 cell heatmaps + correction vector plots
+│       ├── run.sh             # Driver: compile, run fill + plot scripts
+│       └── old/               # Archived previous-iteration scripts
 ├── grid/                      # Grid submission scripts (pathena)
 │   ├── samples/               # Dataset sample lists
 │   ├── download_ntuples.sh    # Download + merge ntuples from grid
@@ -57,9 +59,11 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   ├── data24/                # Pending grid submission
 │   └── mc23e/                 # mc23e_700770_Zeeg.root (13 GB), mc23e_700771_Zmumug.root (23 GB)
 ├── output/                    # gitignored — computed histograms + plots
-│   ├── *.root                 # Histogram ROOT files from compute scripts
-│   ├── plots/                 # PDF plots from ROOT macros
-│   └── data_mc_comparison/    # Data-MC pipeline output
+│   ├── old/                   # Archived output from previous iteration
+│   └── cell_energy_reweighting_Francisco_method/
+│       └── data24/{channel}/{scenario}/
+│           ├── histograms.root
+│           └── plots/
 ├── report/                    # Reports and documentation
 │   ├── egam3_problem_report.md
 │   ├── weta2_investigation_summary.md
@@ -176,6 +180,25 @@ Additional shower shapes from the note (not currently computed in scripts but us
 
 - **Data22 has 0 events**: Runs 428648–429027 (periods A–E) are not in the GRL which starts at run 431810 (period F). Need data from periods F/H/J.
 - **GRL paths are hardcoded** in `NTupleMakerConfig.py` via `getGRL()` function, pointing to `/cvmfs/atlas.cern.ch/repo/sw/database/GroupData/GoodRunsLists/`.
+
+### Pipeline Histogram Naming Convention
+
+All histograms in `histograms.root` use the following naming pattern:
+- Integrated: `h_{var}_{tag}` (e.g. `h_reta_data_stored`, `h_reta_mc_fudged`)
+- Per-eta bin: `h_{var}_{tag}_eta{NN}` (e.g. `h_reta_data_eta00`, `h_reta_mc_M1_eta07`)
+- Cell profiles (in `cell_profiles/` subdir): `h_frac_{type}_eta{NN}` (e.g. `h_frac_mean_data_eta00`)
+
+Variable names: `reta`, `rphi`, `weta2`. Tags: `data`, `data_stored`, `mc`, `mc_fudged`, `mc_unfudged`, `mc_M1`, `mc_M2`.
+
+`plot_shower_shapes.C` reads per-eta histos and produces:
+- SET A (`branch_*.pdf`): Data (stored) vs MC unfudged vs MC fudged — shows ATLAS fudge factor effect
+- SET B (`rew_*.pdf`): Data (cell) vs MC (cell) vs M1 vs M2 — shows cell reweighting methods
+
+`plot_cell_profiles.C` reads `cell_profiles/` subdirectory and produces:
+- `cell_profiles_before.pdf`, `cell_profiles_after_m1.pdf`, `cell_profiles_delta.pdf`
+
+Output base directory: `output/cell_energy_reweighting_Francisco_method/data24/{channel}/{scenario}/`
+(at repo root, **not** inside `scripts/data_mc/`; scripts use relative path `../../output/...`)
 
 ---
 
