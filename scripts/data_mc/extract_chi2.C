@@ -281,7 +281,7 @@ void extract_chi2(
                "``Fudge'' refers to the ATLAS fudge-factor benchmark "
                "(evaluated on stored branch values).}\n";
         out << "\\label{tab:chi2-summary}\n";
-        out << "\\small\n";
+        out << "\\resizebox{\\textwidth}{!}{%\n";
         out << "\\begin{tabular}{ll";
         for (int iv = 0; iv < nVar; ++iv) out << "|rrrr";
         out << "}\n";
@@ -307,7 +307,7 @@ void extract_chi2(
             if (ic < nChan - 1) out << "\\midrule\n";
         }
         out << "\\bottomrule\n";
-        out << "\\end{tabular}\n";
+        out << "\\end{tabular}}\n";
         out << "\\end{table}\n";
         out.close();
         std::cout << "Written: " << fn << std::endl;

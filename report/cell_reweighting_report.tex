@@ -508,41 +508,31 @@ residual (delta) maps and correction vectors.
 Figure~\ref{fig:cell-before} shows the mean cell fraction profiles for
 data and uncorrected MC.  The difference $\Delta_k = \langle
 f_{\text{data}} \rangle_k - \langle f_{\text{MC}} \rangle_k$ is the
-M1 correction (Figure~\ref{fig:cell-delta}).
+M1 correction.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_before.pdf}
+\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_data.pdf}%
+\hfill
+\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_mc.pdf}
 \caption{Mean cell energy fraction profiles before correction:
   data (left) and MC (right), for each $\abseta$ bin.}
 \label{fig:cell-before}
 \end{figure}
 
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_delta.pdf}
-\caption{Delta maps $\Delta = \text{Data} - \text{MC}$ (left) and
-  $\sigma$ ratio $\sigma_{\text{data}} / \sigma_{\text{MC}}$ (right).}
-\label{fig:cell-delta}
-\end{figure}
-
-After M1 correction the MC profile matches data by construction
-(Figure~\ref{fig:cell-after-m1}).  M2 additionally adjusts the cell
-fraction variance (Figure~\ref{fig:cell-after-m2}).
+After M1 correction the MC profile matches data by construction.
+M2 additionally adjusts the cell fraction variance.  Both corrected
+profiles are shown in Figure~\ref{fig:cell-after-m1}.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_after_m1.pdf}
-\caption{Mean cell fraction after M1 correction: data (left) versus
-  corrected MC (right).}
+\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_mc_m1.pdf}%
+\hfill
+\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_mc_m2.pdf}
+\caption{Mean cell fraction after correction: M1 (left) and M2 (right),
+  for each $\abseta$ bin.  Compare with data in
+  Figure~\ref{fig:cell-before}.}
 \label{fig:cell-after-m1}
-\end{figure}
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_after_m2.pdf}
-\caption{Mean cell fraction after M2 correction.}
-\label{fig:cell-after-m2}
 \end{figure}
 
 \subsection{M2 correction vectors}
