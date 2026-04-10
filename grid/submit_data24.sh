@@ -13,10 +13,19 @@ WORKDIR="/project/atlas/users/mfernand/QT/ShowerShapes/NTupleMaker_workspace"
 export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
 source "${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh" --quiet || true
 asetup Athena,25.0.40 || true
+# Force re-sourcing local build setup (guard variable may be inherited from caller)
+unset UserAnalysis_SET_UP 2>/dev/null
 source "${WORKDIR}/build/x86_64-el9-gcc14-opt/setup.sh" 2>/dev/null \
   || source "${WORKDIR}/build/x86_64-el9-gcc13-opt/setup.sh" 2>/dev/null || true
 export RUCIO_ACCOUNT=femarta
 lsetup panda rucio || true
+
+# Verify local build is in CMAKE_PREFIX_PATH (pathena uses this to find CPackConfig.cmake)
+if [[ "${CMAKE_PREFIX_PATH:-}" != *"NTupleMaker_workspace/build"* ]]; then
+    echo "ERROR: Local build not found in CMAKE_PREFIX_PATH. pathena will fail."
+    echo "  CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH:-unset}"
+    exit 1
+fi
 
 # Ensure valid grid proxy
 voms-proxy-info --exists 2>/dev/null || voms-proxy-init -voms atlas

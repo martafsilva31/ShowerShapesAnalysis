@@ -56,3 +56,7 @@ report/*.pdf
 *_C.d
 *_C.so
 *_ACLiC_*
+ATL-COM-PHYS-2025-662.pdf
+grid/0
+grid/1
+report/*_backup.tex

@@ -9,6 +9,8 @@ WORKDIR="/project/atlas/users/mfernand/QT/ShowerShapes/NTupleMaker_workspace"
 export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
 source "${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh" --quiet
 asetup Athena,25.0.40
+# Force re-sourcing local build setup (guard variable may be inherited from caller)
+unset UserAnalysis_SET_UP 2>/dev/null
 source "${WORKDIR}/build/x86_64-el9-gcc14-opt/setup.sh" 2>/dev/null \
   || source "${WORKDIR}/build/x86_64-el9-gcc13-opt/setup.sh"
 lsetup panda rucio
