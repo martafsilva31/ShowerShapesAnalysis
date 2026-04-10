@@ -1,0 +1,813 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% cell_reweighting_report.tex
+%%
+%% Physics report: Photon shower shape corrections using cell-level energy
+%% reweighting with Run 3 data.
+%%
+%% This documents the CURRENT pipeline (M1 flat shift + M2 shift+stretch).
+%% The older investigation of the DeltaR-matched TProfile method is in
+%% data_mc_reweighting_report.tex (kept for reference).
+%%
+%% Compile:
+%%   cd report/
+%%   pdflatex cell_reweighting_report.tex   (x2 for references)
+%%
+%% Prerequisites:
+%%   - Run the pipeline:  cd scripts/data_mc && bash run.sh --batch
+%%   - Run chi2 extraction:  root -l -b -q 'extract_chi2.C'
+%%   This generates chi2_yields.tex, chi2_summary.tex, chi2_tables.tex.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,longtable}
+\usepackage{caption,subcaption}
+\usepackage{float,xcolor}
+\usepackage{hyperref}
+\usepackage{siunitx}
+\usepackage{array}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!50!black,
+  citecolor=blue!50!black,
+  urlcolor=blue!50!black
+}
+
+% Graphics path: output directory (relative to report/)
+\graphicspath{{../output/cell_energy_reweighting_Francisco_method/data24/}}
+
+% Custom commands
+\newcommand{\Reta}{\ensuremath{R_{\eta}}}
+\newcommand{\Rphi}{\ensuremath{R_{\phi}}}
+\newcommand{\weta}{\ensuremath{w_{\eta 2}}}
+\newcommand{\abseta}{\ensuremath{|\eta|}}
+\newcommand{\chisq}{\ensuremath{\chi^2 / n_{\mathrm{df}}}}
+\newcommand{\pt}{\ensuremath{p_{\mathrm{T}}}}
+\newcommand{\Etot}{\ensuremath{E_{\mathrm{total}}}}
+
+\title{Photon Shower Shape Corrections Using Cell-Level Energy Reweighting\\
+       with ATLAS Run\,3 Data}
+\author{Marta Fernandes da Silva}
+\date{April 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Electromagnetic shower shapes (\Reta, \Rphi, \weta) are critical inputs to
+photon identification in ATLAS.  Residual data--MC mismodelling of the
+calorimeter cell energy deposits degrades the accuracy of these
+discriminating variables.  This note presents a cell-level energy
+reweighting approach applied to Layer\,2 of the electromagnetic
+calorimeter using $Z \to \ell\ell\gamma$ final-state-radiation events from
+ATLAS Run\,3 data (2024) and MC23e simulation.
+
+Two correction methods are studied.  Method~1 (M1, flat shift) adjusts
+each cell energy by the mean data--MC fraction difference.  Method~2
+(M2, shift+stretch) additionally matches the variance by applying a
+linear transformation derived from Francisco Almeida's
+\texttt{photoncellbasedrw} framework.  Both methods are evaluated across
+14~$\abseta$ bins, three decay channels ($Z \to ee\gamma$,
+$Z \to \mu\mu\gamma$, combined), and three photon conversion
+scenarios (unconverted, converted, inclusive).
+
+M1 provides robust corrections for \Reta\ and \Rphi\ with minimal
+residual $\chisq$ and exact energy conservation by construction.  M2
+further improves \weta\ by matching the cell-fraction variance.
+Directions for future work include differential \pt-dependent
+corrections and machine-learning approaches such as normalising flows.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+
+%% ====================================================================
+\section{Introduction}
+\label{sec:intro}
+%% ====================================================================
+
+Photon identification in ATLAS relies on shower shape variables computed
+from the energy deposits in the electromagnetic calorimeter.  In
+particular, \Reta, \Rphi, and \weta\ are built from the Layer\,2
+cell energies in a $7 \times 11$ ($\eta \times \phi$) cluster and are
+among the most discriminating variables for separating prompt photons
+from hadronic fakes.
+
+Residual mismodelling of these variables in Monte Carlo simulation is
+addressed by the ATLAS ``fudge factor'' framework, which applies
+empirical corrections to the branch-level shower shape values.  An
+alternative approach, pioneered by Francisco Almeida in Run\,2
+\cite{francisco}, operates at the cell-energy level: the individual cell
+energies are corrected before recomputing the shower shapes, thereby
+preserving the physical correlations between cells.
+
+This note documents the Run\,3 implementation of the cell-level
+reweighting approach.  Two methods are studied:
+\begin{itemize}
+  \item \textbf{Method~1 (M1)}: a flat shift per cell, matching the
+        population mean of the cell energy fraction.
+  \item \textbf{Method~2 (M2)}: a shift+stretch transformation, matching
+        both the mean and the variance, following Francisco Almeida's
+        \texttt{photoncellbasedrw} method \cite{francisco}.
+\end{itemize}
+The analysis uses $Z \to \ell\ell\gamma$ events selected from ATLAS 2024
+data and MC23e simulation, processed through the NTupleMaker framework.
+
+
+%% ====================================================================
+\section{Data and MC Samples}
+\label{sec:samples}
+%% ====================================================================
+
+The analysis uses ATLAS data collected in 2024 and the corresponding
+MC23e simulation campaign.  Two channels are considered:
+\begin{itemize}
+  \item $Z \to ee\gamma$: data from DAOD\_EGAM3 (\texttt{egam3.root}),
+        MC sample DSID~700770.
+  \item $Z \to \mu\mu\gamma$: data from DAOD\_EGAM4 (\texttt{egam4.root}),
+        MC sample DSID~700771.
+\end{itemize}
+The combined channel ($Z \to \ell\ell\gamma$) merges both data and MC
+samples.  Ntuples are produced by the NTupleMaker package running in
+Athena~25.0.40.
+
+MC events are weighted by $w = w_{\text{MC}} \times w_\mu \times \sigma$,
+where $w_{\text{MC}}$ is the generator weight, $w_\mu$ the pile-up
+reweighting factor, and $\sigma$ the cross-section weight.
+
+\input{chi2_yields}
+
+%% ====================================================================
+\section{Event Selection}
+\label{sec:selection}
+%% ====================================================================
+
+Events are selected in two stages: a preselection applied at the
+NTupleMaker level during ntuple production, and an offline selection
+applied by the analysis pipeline.
+
+\subsection{NTupleMaker-level preselection}
+\label{sec:preselection}
+
+The NTupleMaker applies Good Runs List (GRL) filtering, trigger
+matching, and basic lepton quality requirements.  Photon candidates are
+required to have a complete $7 \times 11$ Layer\,2 cell cluster
+(77~cells) stored in the ntuple output.
+
+\subsection{Offline selection}
+\label{sec:offline-selection}
+
+The analysis pipeline applies the following offline cuts:
+
+\begin{table}[htbp]
+\centering
+\caption{Summary of offline selection requirements.}
+\label{tab:selection}
+\begin{tabular}{ll}
+\toprule
+Requirement & Value \\
+\midrule
+Photon \pt         & $> 10$~GeV \\
+Photon $\abseta$   & $< 2.37$, excluding $1.37 \leq \abseta < 1.52$ \\
+Dilepton mass      & $40 < m_{\ell\ell} < 83$~GeV \\
+Three-body mass    & $80 < m_{\ell\ell\gamma} < 100$~GeV \\
+$\Delta R(\ell, \gamma)$ & $> 0.4$ (both leptons) \\
+Cluster size       & exactly 77 cells \\
+Central cell       & must carry the highest energy \\
+Total cluster energy & $> 0$ \\
+MC truth matching  & required for MC events \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The dilepton and three-body mass windows select the final-state-radiation
+(FSR) topology $Z \to \ell\ell\gamma$.  The central-cell requirement
+ensures a well-measured shower core.
+
+\subsection{Conversion scenarios}
+\label{sec:conversion-scenarios}
+
+Three conversion scenarios are studied:
+\begin{itemize}
+  \item \textbf{Baseline} (unconverted): only unconverted photons
+        ($\texttt{isConv} = \texttt{false}$), with loose isolation.
+  \item \textbf{Converted}: only converted photons
+        ($\texttt{isConv} = \texttt{true}$), with loose isolation.
+  \item \textbf{All conversions}: no conversion requirement, with loose
+        isolation.
+\end{itemize}
+
+
+%% ====================================================================
+\section{Shower Shape Variables}
+\label{sec:shower-shapes}
+%% ====================================================================
+
+The three shower shape variables are computed from the $7 \times 11$
+Layer\,2 cell energy cluster centred on the cell with the highest energy
+(index~38 in the row-major ordering).  The cell granularity is
+$\Delta\eta = 0.025$ and $\Delta\phi \approx 0.0245$.
+
+\begin{description}
+  \item[\Reta] Ratio of the energy in a $3 \times 7$ ($\eta \times \phi$)
+    window to the energy in the full $7 \times 7$ window:
+    \begin{equation}
+      \Reta = \frac{E_{3 \times 7}}{E_{7 \times 7}} \,.
+    \end{equation}
+
+  \item[\Rphi] Ratio of the energy in a $3 \times 3$ window to the energy
+    in a $3 \times 7$ window:
+    \begin{equation}
+      \Rphi = \frac{E_{3 \times 3}}{E_{3 \times 7}} \,.
+    \end{equation}
+
+  \item[\weta] Energy-weighted $\eta$ width in a $3 \times 5$ window
+    centred on the hottest cell:
+    \begin{equation}
+      \weta = \sqrt{\frac{\sum_i E_i \, (\eta_i - \bar\eta)^2}{\sum_i E_i}}
+      \,,\qquad
+      \bar\eta = \frac{\sum_i E_i \, \eta_i}{\sum_i E_i} \,,
+    \end{equation}
+    where the sum runs over the $3 \times 5$ cells.  A position-dependent
+    correction is applied following the ATLAS convention.
+\end{description}
+
+The energy windows $E_{n \times m}$ are computed from the cell energies
+using the cell $\eta$ and $\phi$ positions to identify which cells fall
+within the window, following the implementation in \texttt{config.h}.
+
+\paragraph{Validation.}
+The cell-computed shower shapes are validated against the values stored
+in the ntuple branches (which are the official ATLAS reconstruction
+values).  Figure~\ref{fig:computed-vs-stored} shows excellent agreement,
+confirming that the cell-level computation faithfully reproduces the
+standard shower shapes.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/computed_vs_stored.pdf}
+\caption{Validation: cell-computed shower shapes versus stored ntuple
+  branch values for the combined $Z \to \ell\ell\gamma$ channel
+  (unconverted photons).}
+\label{fig:computed-vs-stored}
+\end{figure}
+
+
+%% ====================================================================
+\section{Correction Methods}
+\label{sec:methods}
+%% ====================================================================
+
+Both correction methods operate on the cell energy fractions
+$f_k = E_k / \Etot$, where $E_k$ is the energy of cell~$k$ and
+$\Etot = \sum_{k=1}^{77} E_k$ is the total cluster energy.
+Corrections are derived independently for each of 14~$\abseta$ bins
+(Section~\ref{sec:selection}).
+
+\subsection{Method~1: flat shift}
+\label{sec:m1}
+
+For each cell~$k$ and $\abseta$ bin, the correction is defined as the
+difference in population-mean fractions between data and MC:
+\begin{equation}
+  \Delta_k = \langle f_{\text{data}} \rangle_k
+           - \langle f_{\text{MC}} \rangle_k \,.
+  \label{eq:m1-delta}
+\end{equation}
+The corrected cell energy is then
+\begin{equation}
+  E'_k = E_k + \Delta_k \times \Etot \,.
+  \label{eq:m1-apply}
+\end{equation}
+
+\paragraph{Energy conservation.}
+Since $\sum_k \langle f_{\text{data}} \rangle_k = \sum_k \langle
+f_{\text{MC}} \rangle_k = 1$, the sum of corrections vanishes:
+$\sum_k \Delta_k = 0$.  Therefore $\sum_k E'_k = \Etot$ exactly, with
+no need for renormalisation.
+
+M1 is simple and robust: it corrects the mean cell profile but does not
+modify the variance of the cell fraction distribution.
+
+\subsection{Method~2: shift+stretch (Francisco's method)}
+\label{sec:m2}
+
+Method~2 additionally matches the standard deviation of the cell
+fraction distribution.  For each cell~$k$, define:
+\begin{align}
+  \text{stretch}_k &= \frac{\sigma_{\text{data},k}}{\sigma_{\text{MC},k}}
+  \,,\label{eq:m2-stretch}\\
+  \text{shift}_k &= \mu_{\text{data},k}
+                   - \text{stretch}_k \times \mu_{\text{MC},k}
+  \,,\label{eq:m2-shift}
+\end{align}
+where $\mu$ and $\sigma$ denote the population mean and standard
+deviation of the cell fraction $f_k$ in data and MC respectively.
+The corrected cell energy is
+\begin{equation}
+  E'_k = \Etot \times \text{shift}_k
+       + \text{stretch}_k \times E_k \,.
+  \label{eq:m2-apply}
+\end{equation}
+
+This is a linear transformation of the cell energy.  At the population
+level:
+\begin{itemize}
+  \item The mean is matched:
+    $\langle E'_k / \Etot \rangle = \text{stretch}_k \cdot \mu_{\text{MC},k}
+    + \text{shift}_k = \mu_{\text{data},k}$.
+  \item The standard deviation is matched:
+    $\sigma'_k = \text{stretch}_k \cdot \sigma_{\text{MC},k}
+    = \sigma_{\text{data},k}$.
+\end{itemize}
+
+\paragraph{Energy conservation.}
+Unlike M1, M2 does not automatically conserve total energy.  A
+rescaling step is applied after correction:
+\begin{equation}
+  E'_k \leftarrow E'_k \times \frac{\Etot}{\sum_{j} E'_j} \,.
+  \label{eq:m2-rescale}
+\end{equation}
+
+This method corresponds to Francisco Almeida's
+\texttt{photoncellbasedrw} approach \cite{francisco}, adapted for
+Run\,3 data.
+
+
+%% ====================================================================
+\section{ATLAS Fudge Factors as Benchmark}
+\label{sec:fudge}
+%% ====================================================================
+
+The standard ATLAS approach applies ``fudge factors'' that correct the
+shower shape branch values directly.  These corrections are derived from
+the TUNE27AD calibration and are applied at the ntuple level: each MC
+event carries both fudged (\texttt{photon.reta}) and unfudged
+(\texttt{photon.reta\_unfudged}) branch values.
+
+Throughout this note the fudge factor performance serves as the
+\emph{benchmark} against which the cell reweighting methods are
+compared.  Figure~\ref{fig:fudge-benchmark} shows the fudge factor
+comparison for the combined channel, unconverted photons.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/fudge_factors.pdf}
+\caption{Fudge factor benchmark: data (stored branch values) versus MC
+  fudged and unfudged, for the combined $Z \to \ell\ell\gamma$ channel,
+  unconverted photons.  One page per $\abseta$ bin.}
+\label{fig:fudge-benchmark}
+\end{figure}
+
+
+%% ====================================================================
+\section{Results: Baseline (Unconverted Photons)}
+\label{sec:results-baseline}
+%% ====================================================================
+
+This section presents the main results for the combined channel
+($Z \to \ell\ell\gamma$) with unconverted photons (baseline scenario).
+
+\subsection{Shower shape comparisons}
+\label{sec:results-shower}
+
+Figures~\ref{fig:rew-reta}--\ref{fig:rew-weta2} show the cell-computed
+shower shapes for data, uncorrected MC, and MC after M1 and M2
+corrections.  Each PDF contains one page per $\abseta$ bin.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/rew_reta.pdf}
+\caption{Cell-computed \Reta\ comparison: data versus uncorrected MC,
+  M1 (shift only), and M2 (shift+stretch), for the combined channel,
+  unconverted photons.}
+\label{fig:rew-reta}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/rew_rphi.pdf}
+\caption{Cell-computed \Rphi\ comparison (same layout as
+  Figure~\ref{fig:rew-reta}).}
+\label{fig:rew-rphi}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/rew_weta2.pdf}
+\caption{Cell-computed \weta\ comparison (same layout as
+  Figure~\ref{fig:rew-reta}).}
+\label{fig:rew-weta2}
+\end{figure}
+
+\subsection{Chi-squared comparison}
+\label{sec:results-chi2}
+
+Table~\ref{tab:chi2-llgamma-baseline} reports the $\chisq$ between each
+MC variant and data, computed bin-by-bin after area normalisation, for
+each $\abseta$ bin.  The Pearson $\chi^2$ is defined as
+\begin{equation}
+  \chi^2 = \sum_{b} \frac{(h^{\text{MC}}_b - h^{\text{data}}_b)^2}
+                         {h^{\text{data}}_b} \,,
+\end{equation}
+where the sum runs over histogram bins with $h^{\text{data}}_b > 0$.
+
+\subsection{Average performance}
+\label{sec:results-average}
+
+Table~\ref{tab:chi2-summary} summarises the average $\chisq$ across all
+non-empty $\abseta$ bins for each method, channel, and conversion
+scenario.
+
+\input{chi2_summary}
+
+
+%% ====================================================================
+\section{Conversion Scenarios}
+\label{sec:conversion}
+%% ====================================================================
+
+The corrections are re-derived independently for each conversion
+scenario.  Converted photons have different cluster energy profiles
+due to the upstream conversion, and the correction parameters adapt
+accordingly.
+
+\subsection{Converted photons}
+\label{sec:conv-converted}
+
+Figure~\ref{fig:rew-reta-converted} shows the \Reta\ comparison for
+converted photons in the combined channel.  The corresponding $\chisq$
+values are reported in Table~\ref{tab:chi2-llgamma-converted}
+(Appendix~\ref{app:chi2-tables}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/converted/plots/rew_reta.pdf}
+\caption{Cell-computed \Reta\ for the combined channel, converted
+  photons: data versus MC, M1, and M2.}
+\label{fig:rew-reta-converted}
+\end{figure}
+
+\subsection{All conversions combined}
+\label{sec:conv-allconv}
+
+Figure~\ref{fig:rew-reta-allconv} shows the \Reta\ comparison without
+any conversion requirement.  Full $\chisq$ tables are in
+Table~\ref{tab:chi2-llgamma-all_conv} (Appendix~\ref{app:chi2-tables}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/all_conv/plots/rew_reta.pdf}
+\caption{Cell-computed \Reta\ for the combined channel, all conversions:
+  data versus MC, M1, and M2.}
+\label{fig:rew-reta-allconv}
+\end{figure}
+
+\subsection{Comparison across scenarios}
+\label{sec:conv-comparison}
+
+The summary table (Table~\ref{tab:chi2-summary}) allows direct
+comparison of the average $\chisq$ across conversion scenarios.  In
+general the corrections perform well for all scenarios, with M2
+providing the most significant improvement for \weta.
+
+
+%% ====================================================================
+\section{Per-Channel Results}
+\label{sec:per-channel}
+%% ====================================================================
+
+The corrections are derived and evaluated separately for each decay
+channel.  Tables for the $Z \to ee\gamma$ and $Z \to \mu\mu\gamma$
+channels are available in Appendix~\ref{app:chi2-tables}
+(Tables~\ref{tab:chi2-eegamma-baseline}--\ref{tab:chi2-mumugamma-all_conv}).
+
+Both channels show consistent behaviour: the correction performance is
+stable across the two lepton flavours, validating the use of the
+combined channel as the primary result.
+
+
+%% ====================================================================
+\section{Cell Energy Profile Maps}
+\label{sec:cell-profiles}
+%% ====================================================================
+
+The pipeline produces $7 \times 11$ heatmaps of the mean cell energy
+fraction for data, uncorrected MC, and corrected MC, as well as
+residual (delta) maps and correction vectors.
+
+\subsection{Before and after correction}
+
+Figure~\ref{fig:cell-before} shows the mean cell fraction profiles for
+data and uncorrected MC.  The difference $\Delta_k = \langle
+f_{\text{data}} \rangle_k - \langle f_{\text{MC}} \rangle_k$ is the
+M1 correction (Figure~\ref{fig:cell-delta}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_before.pdf}
+\caption{Mean cell energy fraction profiles before correction:
+  data (left) and MC (right), for each $\abseta$ bin.}
+\label{fig:cell-before}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_delta.pdf}
+\caption{Delta maps $\Delta = \text{Data} - \text{MC}$ (left) and
+  $\sigma$ ratio $\sigma_{\text{data}} / \sigma_{\text{MC}}$ (right).}
+\label{fig:cell-delta}
+\end{figure}
+
+After M1 correction the MC profile matches data by construction
+(Figure~\ref{fig:cell-after-m1}).  M2 additionally adjusts the cell
+fraction variance (Figure~\ref{fig:cell-after-m2}).
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_after_m1.pdf}
+\caption{Mean cell fraction after M1 correction: data (left) versus
+  corrected MC (right).}
+\label{fig:cell-after-m1}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_profiles_after_m2.pdf}
+\caption{Mean cell fraction after M2 correction.}
+\label{fig:cell-after-m2}
+\end{figure}
+
+\subsection{M2 correction vectors}
+
+The M2 shift and stretch parameters are visualised as 1D vectors per
+$\abseta$ bin in Figures~\ref{fig:cell-shift}~and~\ref{fig:cell-stretch}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_shift.pdf}
+\caption{M2 shift correction vector $\text{shift}_k$ for each cell~$k$,
+  per $\abseta$ bin.}
+\label{fig:cell-shift}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_stretch.pdf}
+\caption{M2 stretch correction vector $\text{stretch}_k$ for each
+  cell~$k$, per $\abseta$ bin.}
+\label{fig:cell-stretch}
+\end{figure}
+
+
+%% ====================================================================
+\section{Discussion}
+\label{sec:discussion}
+%% ====================================================================
+
+\subsection{M1 strengths and limitations}
+\label{sec:disc-m1}
+
+Method~1 is attractive for its simplicity and guaranteed energy
+conservation.  It corrects the mean cell profile perfectly by
+construction.  For \Reta\ and \Rphi, which are ratios of energy sums
+over groups of cells, matching the mean fractions is often sufficient
+to achieve data--MC agreement.
+
+However, \weta\ is a second-moment quantity (energy-weighted variance),
+and M1's correction of only the first moment leaves residual
+discrepancies.  In $\abseta$ bins where the data and MC variance differ
+substantially, M1 underperforms.
+
+\subsection{M2 improvements}
+\label{sec:disc-m2}
+
+Method~2 improves on M1 by additionally matching the variance of each
+cell's energy fraction.  The linear shift+stretch transformation
+captures the first two moments of the $f_k$ distribution, which
+translates into better agreement for second-moment quantities like
+\weta.
+
+The energy rescaling step~\eqref{eq:m2-rescale} introduces a small
+deviation from exact energy conservation.  In practice the rescaling
+factor is close to unity, confirming that M2 approximately conserves
+energy.
+
+\subsection{Problematic \texorpdfstring{$\abseta$}{|eta|} bins}
+\label{sec:disc-problematic}
+
+Certain $\abseta$ bins may show elevated $\chisq$ for both methods:
+\begin{itemize}
+  \item Bin~8 ($1.37 \leq \abseta < 1.52$): the calorimeter crack
+        region, excluded from the analysis.
+  \item High-$\abseta$ bins ($\abseta > 2.0$): limited statistics and
+        different cluster geometry may reduce correction quality.
+  \item Transition bins near the crack: material effects can affect
+        shower profiles.
+\end{itemize}
+
+Where the stretch ratio $\sigma_{\text{data},k} / \sigma_{\text{MC},k}$
+is very large or very small, the M2 correction can overstretch or
+compress the cell fraction distribution.  Regularisation (capping the
+stretch ratio) has not been applied in this analysis.
+
+
+%% ====================================================================
+\section{Future Work}
+\label{sec:future}
+%% ====================================================================
+
+\subsection{Binning strategy studies}
+\label{sec:future-binning}
+
+The current corrections are derived in 14~$\abseta$ bins with no
+dependence on photon \pt\ or other kinematic variables.  Francisco
+Almeida's \texttt{photoncellbasedrw} framework supports five binning
+strategies \cite{francisco}:
+
+\begin{enumerate}
+  \item \textbf{\pt\ $\times$ $\abseta$}: 6~\pt\ bins $\times$
+        14~$\abseta$ bins $= 84$ sets of 77-cell corrections.
+        This captures \pt-dependent shower evolution.
+  \item \textbf{Coarse $\abseta$}: 5~broad $\abseta$ bins instead of 14,
+        trading granularity for better per-bin statistics in
+        data-limited regions.
+  \item \textbf{Hit-position $\lambda$}: the impact position of the
+        shower within each cell, divided into 5~$\lambda$ regions.
+        This captures sub-cell shower position effects.
+  \item \textbf{Quadrant}: 4~sectors defined by
+        $\text{sign}(\Delta\eta) \times \text{sign}(\Delta\phi)$
+        relative to the cluster centre, capturing asymmetric shower
+        profiles.
+  \item \textbf{Combined $\lambda$ + quadrant}: the most granular
+        option, combining hit position and angular sectors.
+\end{enumerate}
+
+These studies would be performed on the combined
+$Z \to \ell\ell\gamma$ channel with all three conversion scenarios,
+giving $4 \text{ binning modes} \times 3 \text{ scenarios} = 12$
+additional pipeline runs.
+
+\subsection{Machine-learning approaches}
+\label{sec:future-ml}
+
+The M1 and M2 methods apply independent linear corrections to each of
+the 77~cells.  This has two fundamental limitations: (a)~inter-cell
+correlations are not preserved, and (b)~higher-order (non-Gaussian)
+features of the cell energy distribution are not captured.
+Machine-learning methods can address both limitations.
+
+\subsubsection{Normalising flows}
+
+A normalising flow \cite{papamakarios} learns a bijective transformation
+$g: \mathbb{R}^{77} \to \mathbb{R}^{77}$ such that the
+distribution of $g(\mathbf{f}_{\text{MC}})$ matches
+$\mathbf{f}_{\text{data}}$, where $\mathbf{f}$ is the 77-dimensional
+vector of cell energy fractions.
+
+\begin{itemize}
+  \item \textbf{Full multivariate correction}: the transformation
+        operates on the joint distribution of all 77~cells
+        simultaneously, automatically preserving inter-cell correlations.
+  \item \textbf{Conditional flows}: the transformation can be
+        conditioned on $(\pt, \eta)$, providing differential corrections
+        without explicit binning and the associated statistical
+        fragmentation.
+  \item \textbf{Non-Gaussian tails}: normalising flows can model
+        arbitrary distributions, including the heavy tails observed in
+        some cell fractions.
+\end{itemize}
+
+The training data would consist of cell fraction vectors from data and MC
+events passing the same $Z \to \ell\ell\gamma$ selection, with the flow
+trained to transport the MC distribution to data.
+
+\subsubsection{Quantile regression and mapping}
+
+An alternative per-cell approach is quantile mapping: for each cell~$k$,
+the MC fraction $f_k^{\text{MC}}$ is mapped to the data distribution via
+\begin{equation}
+  f_k^{\text{corr}} = F_{\text{data},k}^{-1}\bigl(
+    F_{\text{MC},k}(f_k^{\text{MC}})\bigr) \,,
+\end{equation}
+where $F$ denotes the cumulative distribution function.  This can be
+implemented empirically (histogram-based CDF) or learned via
+neural-network quantile regression \cite{koenker}.
+
+Quantile mapping is non-linear and can correct arbitrary distributional
+differences, improving on the linear M1/M2 transformations.  It can also
+be extended to conditional quantile mapping, where $F$ depends on
+$(\pt, \eta)$.
+
+\subsubsection{Advantages and practical considerations}
+
+Machine-learning approaches offer several advantages over M1/M2:
+\begin{enumerate}
+  \item \textbf{Inter-cell correlations}: flows model the full joint
+        distribution; M1/M2 correct cells independently.
+  \item \textbf{No binning artefacts}: continuous conditioning replaces
+        discrete $\abseta$ and \pt\ bins.
+  \item \textbf{Non-linear transformations}: handle complex
+        distributional differences that linear methods miss.
+  \item \textbf{Scalability}: the same architecture works for different
+        calorimeter layers or cluster sizes.
+\end{enumerate}
+
+Practical challenges include:
+\begin{itemize}
+  \item \textbf{Training data}: the $Z \to \ell\ell\gamma$ sample
+        provides $\sim$$150\,\text{K}$ data events and
+        $\sim$$2.4\,\text{M}$ MC events, which may be limiting for
+        77-dimensional flows.
+  \item \textbf{Overfitting}: regularisation, early stopping, and
+        validation splits are essential.
+  \item \textbf{Inference in C++}: ATLAS production workflows require
+        fast C++ inference, necessitating ONNX export or equivalent.
+  \item \textbf{Transferability}: corrections derived on FSR photons
+        must be validated for other photon populations (e.g.\ $H \to
+        \gamma\gamma$).
+\end{itemize}
+
+
+%% ====================================================================
+\section{Summary}
+\label{sec:summary}
+%% ====================================================================
+
+This note documents a cell-level energy reweighting pipeline for
+correcting photon shower shape variables (\Reta, \Rphi, \weta) in ATLAS
+Run\,3 simulation.  Using $Z \to \ell\ell\gamma$ events from 2024 data
+and MC23e, corrections are derived and applied in 14~$\abseta$ bins
+across three decay channels and three conversion scenarios.
+
+Two methods are implemented:
+\begin{itemize}
+  \item \textbf{M1 (flat shift)}: corrects the mean cell fraction with
+        exact energy conservation.  Provides robust improvement for
+        \Reta\ and \Rphi.
+  \item \textbf{M2 (shift+stretch)}: additionally matches the cell
+        fraction variance, following Francisco Almeida's method.
+        Provides further improvement for \weta.
+\end{itemize}
+
+The ATLAS fudge factors remain the established benchmark.  The cell-level
+methods offer a complementary approach that operates at a more
+fundamental level and preserves inter-cell physics.
+
+Future directions include differential $\pt \times \abseta$ binning
+strategies and machine-learning approaches (normalising flows, quantile
+mapping) that can model the full multivariate cell energy distribution.
+
+
+%% ====================================================================
+\appendix
+\section{Per-Eta Chi-Squared Tables}
+\label{app:chi2-tables}
+%% ====================================================================
+
+This appendix contains the per-$\abseta$-bin $\chisq$ tables for all
+channel and conversion scenario combinations.
+
+\input{chi2_tables}
+
+
+%% ====================================================================
+\begin{thebibliography}{9}
+
+\bibitem{francisco}
+  F.~Almeida,
+  ``Shower shape corrections using cell-level reweighting'',
+  ATL-COM-PHYS-2021-640 (2021).
+
+\bibitem{run3note}
+  M.~Fernandes da Silva,
+  ``Photon shower shape studies with Run\,3 data'',
+  ATL-COM-PHYS-2025-662 (2025).
+
+\bibitem{atlas-fudge}
+  ATLAS Collaboration,
+  ``Photon identification and shower shape corrections'',
+  internal ATLAS documentation and calibrations.
+
+\bibitem{papamakarios}
+  G.~Papamakarios, E.~Nalisnick, D.~J.~Rezende, S.~Mohamed, and
+  B.~Lakshminarayanan,
+  ``Normalizing flows for probabilistic modeling and inference'',
+  \emph{J.\ Mach.\ Learn.\ Res.} \textbf{22} (2021) 1--64,
+  \href{https://arxiv.org/abs/1912.02762}{arXiv:1912.02762}.
+
+\bibitem{koenker}
+  R.~Koenker and G.~Bassett,
+  ``Regression quantiles'',
+  \emph{Econometrica} \textbf{46} (1978) 33--50.
+
+\end{thebibliography}
+
+\end{document}

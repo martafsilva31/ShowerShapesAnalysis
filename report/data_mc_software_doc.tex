@@ -1,0 +1,471 @@
+% ============================================================================
+%  Data–MC Cell Reweighting Pipeline — Software Documentation
+% ============================================================================
+\documentclass[12pt,a4paper]{article}
+
+% --- Packages ---------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[margin=2.5cm,headheight=15pt]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{siunitx}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{array}
+
+% --- Page style -------------------------------------------------------------
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Data--MC Reweighting Pipeline — Software Documentation}
+\fancyhead[R]{\small ATLAS Internal}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Hyperref setup ---------------------------------------------------------
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=blue!60!black,
+  urlcolor=blue!60!black
+}
+
+% --- Listings style ---------------------------------------------------------
+\definecolor{codebg}{gray}{0.96}
+\definecolor{codegreen}{rgb}{0.2,0.5,0.2}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+
+\lstdefinestyle{shellstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{codegray},
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  framesep=3pt,
+  numbers=none,
+  showstringspaces=false,
+  commentstyle=\color{codegreen}\itshape,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  stringstyle=\color{red!60!black},
+  language=bash,
+  morekeywords={root,bash,source,cd,mkdir},
+  literate={~}{{\raisebox{0.5ex}{\texttildelow}}}{1},
+}
+
+\lstdefinestyle{cppstyle}{
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{codegray},
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  framesep=3pt,
+  numbers=left,
+  numberstyle=\tiny\color{codegray},
+  showstringspaces=false,
+  commentstyle=\color{codegreen}\itshape,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  stringstyle=\color{red!60!black},
+  language=C++,
+}
+
+\lstset{style=shellstyle}
+
+% --- Title ------------------------------------------------------------------
+\title{%
+  \textbf{Data--MC Cell Reweighting Pipeline}\\[6pt]
+  \large Software Documentation\\[4pt]
+  \large Photon Shower Shape Corrections — MC23e / Data24\\[4pt]
+  \normalsize Version 2.0
+}
+\author{ATLAS Simulation}
+\date{\today}
+
+% ============================================================================
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\tableofcontents
+\clearpage
+
+% ============================================================================
+\section{Overview}
+\label{sec:overview}
+% ============================================================================
+
+The data--MC cell reweighting pipeline derives and applies cell-level energy
+corrections to photon shower shape variables in the ATLAS electromagnetic
+calorimeter. The pipeline operates on ntuples produced by the
+\texttt{NTupleMaker} Athena algorithm and produces corrected shower shape
+distributions, validation plots, and diagnostic outputs.
+
+The pipeline flow is:
+
+\begin{enumerate}[leftmargin=2em]
+  \item \textbf{Derive corrections} (\texttt{derive\_corrections.C}):
+    Compute per-cell correction parameters (M1/M2/M3) from data and MC
+    ntuples, stored in \texttt{corrections.root}.
+  \item \textbf{Validate} (\texttt{validate\_data\_mc.C}):
+    Apply corrections to MC, fill histograms of shower shape variables
+    (branch-based and cell-computed), output to \texttt{histos.root}.
+  \item \textbf{Plot shower shapes} (\texttt{plot\_data\_mc.C}):
+    Overlay data vs MC (uncorrected and corrected) per $|\eta|$ bin.
+  \item \textbf{Plot cell profiles} (\texttt{plot\_cell\_profiles.C}):
+    Visualise $7\times11$ cell energy fraction maps and per-method residuals.
+  \item \textbf{Plot stored vs computed} (\texttt{plot\_stored\_vs\_computed.C}):
+    Compare branch-stored vs cell-recomputed shower shapes.
+\end{enumerate}
+
+All scripts share a common configuration header (\texttt{config.h}) and
+support parameterised isolation levels for systematic studies.
+
+% ============================================================================
+\section{Software Requirements}
+\label{sec:requirements}
+% ============================================================================
+
+\begin{table}[htbp]
+\centering
+\caption{Software dependencies.}
+\label{tab:requirements}
+\begin{tabular}{llp{8cm}}
+\toprule
+\textbf{Software} & \textbf{Version} & \textbf{Purpose} \\
+\midrule
+ROOT & 6.28.04 & Event processing, histogramming, TProfile, plotting \\
+OS   & AlmaLinux~9 (EL9) & CERN lxplus cluster \\
+CVMFS & \texttt{/cvmfs/atlas.cern.ch/} & Software distribution \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Environment setup}
+
+\begin{lstlisting}
+export ATLAS_LOCAL_ROOT_BASE=/cvmfs/atlas.cern.ch/repo/ATLASLocalRootBase
+source ${ATLAS_LOCAL_ROOT_BASE}/user/atlasLocalSetup.sh --quiet
+lsetup "root 6.28.04-x86_64-el9-gcc13-opt" --quiet
+\end{lstlisting}
+
+% ============================================================================
+\section{Repository Structure}
+\label{sec:structure}
+% ============================================================================
+
+\begin{longtable}{p{5.5cm}p{9cm}}
+\toprule
+\textbf{File} & \textbf{Description} \\
+\midrule
+\endhead
+\texttt{scripts/data\_mc/config.h} & Shared configuration: branch names, $|\eta|$ binning, cluster geometry, selection cuts, isolation parameters, helper functions \\
+\texttt{scripts/data\_mc/derive\_corrections.C} & Step~1: Derive M1/M2/M3 corrections from data+MC \\
+\texttt{scripts/data\_mc/validate\_data\_mc.C} & Step~2: Apply corrections, fill histograms \\
+\texttt{scripts/data\_mc/plot\_data\_mc.C} & Step~3: Overlay shower shape distributions \\
+\texttt{scripts/data\_mc/plot\_cell\_profiles.C} & Step~4: Cell profile maps + per-method residuals \\
+\texttt{scripts/data\_mc/plot\_stored\_vs\_computed.C} & Step~5: Branch vs cell-computed comparison \\
+\texttt{scripts/data\_mc/plot\_fudge\_binned.C} & Fudge factor validation (TUNE27AD binning) \\
+\texttt{scripts/data\_mc/run\_pipeline.sh} & Run full pipeline for one channel + isolation \\
+\texttt{scripts/data\_mc/run\_all\_channels.sh} & Run all channels $\times$ isolation variants \\
+\bottomrule
+\end{longtable}
+
+% ============================================================================
+\section{Configuration (\texttt{config.h})}
+\label{sec:config}
+% ============================================================================
+
+All analysis parameters are centralised in \texttt{config.h} within the
+\texttt{datamc} namespace.
+
+\subsection{Cluster geometry}
+
+\begin{lstlisting}[style=cppstyle]
+const int kPhiSize = 11;  // phi direction
+const int kEtaSize = 7;   // eta direction
+const int kClusterSize = kPhiSize * kEtaSize;  // 77 cells
+\end{lstlisting}
+
+\subsection{Pseudorapidity binning}
+
+14~bins following the standard ATLAS EM calorimeter segmentation.
+Bin~8 ($1.37 \leq |\eta| < 1.52$) is the barrel--endcap crack region
+and is always empty due to passEtaAcceptance rejection.
+
+\subsection{Energy fraction binning (M2)}
+
+9~bins in the physical range $[0, 0.5]$ for M2 TProfile histograms:
+\begin{lstlisting}[style=cppstyle]
+const double kFracBins[] = {0.0, 0.02, 0.04, 0.06, 0.08,
+                            0.10, 0.15, 0.20, 0.30, 0.50};
+const int kNFracBins = 9;
+\end{lstlisting}
+
+\subsection{Isolation levels}
+
+\begin{lstlisting}[style=cppstyle]
+// Thresholds
+const float kPtcone20OverPtMax = 0.05;
+const float kTopoetcone40OverPtMax = 2.472;
+
+// Sigma ratio capping for M3
+const double kSigmaRatioMin = 0.5;
+const double kSigmaRatioMax = 2.0;
+\end{lstlisting}
+
+The \texttt{passSelection()} function accepts an \texttt{isoLevel}
+parameter (0--3) that gates the isolation requirements:
+\begin{itemize}
+  \item \texttt{isoLevel $\geq$ 1}: Require \texttt{isotight} $= 1$.
+  \item \texttt{isoLevel $\geq$ 2}: Additionally require
+    \texttt{ptcone20}$/\pt < 0.05$.
+  \item \texttt{isoLevel $\geq$ 3}: Additionally require
+    \texttt{topoetcone40}$/\pt < 2.472$.
+\end{itemize}
+
+All isolation parameters have default values of zero, maintaining
+backward compatibility with existing call sites.
+
+% ============================================================================
+\section{Script Reference}
+\label{sec:scripts}
+% ============================================================================
+
+\subsection{\texttt{derive\_corrections.C}}
+\label{sec:scripts:derive}
+
+\paragraph{Purpose.} Derive per-cell correction parameters for all three
+methods from data and MC ntuples.
+
+\paragraph{Signature.}
+\begin{lstlisting}[style=cppstyle]
+void derive_corrections(const char* dataFile,
+                        const char* mcFile,
+                        const char* outFile,
+                        Long64_t maxEvents = -1,
+                        int isoLevel = 0);
+\end{lstlisting}
+
+\paragraph{Output.} \texttt{corrections.root} containing:
+\begin{itemize}
+  \item \texttt{cellsMeanData\_Eta\_LO\_HI} (TH2D): Mean data fractions.
+  \item \texttt{cellsMeanMC\_Eta\_LO\_HI} (TH2D): Mean MC fractions.
+  \item \texttt{cellsDelta\_Eta\_LO\_HI} (TH2D): M1 shifts.
+  \item \texttt{cellsSigmaRatio\_Eta\_LO\_HI} (TH2D): M3 sigma ratios
+    (capped to $[0.5, 2.0]$).
+  \item \texttt{m2\_alpha\_Cell\_K\_Eta\_LO\_HI} (TProfile): M2 profiled
+    corrections per cell per $|\eta|$ bin.
+\end{itemize}
+
+\subsection{\texttt{validate\_data\_mc.C}}
+\label{sec:scripts:validate}
+
+\paragraph{Purpose.} Apply corrections to MC events and fill shower shape
+histograms for data and MC (corrected and uncorrected).
+
+\paragraph{Signature.}
+\begin{lstlisting}[style=cppstyle]
+int validate_data_mc(const char* dataFile,
+                     const char* mcFile,
+                     const char* corrFile,
+                     const char* histoFile,
+                     Long64_t maxEvents = -1,
+                     int isoLevel = 0);
+\end{lstlisting}
+
+\paragraph{Output.} \texttt{histos.root} containing per-$|\eta|$-bin
+histograms:
+\begin{itemize}
+  \item Set~A (branch-based): \texttt{\{reta,rphi,weta2\}\_\{data\_br,mc\_unf,mc\_fud\}\_N}
+  \item Set~B (cell-computed): \texttt{\{reta,rphi,weta2\}\_\{data\_cell,mc\_cell,m1,m2,m3\}\_N}
+\end{itemize}
+
+\subsection{\texttt{plot\_data\_mc.C}}
+\label{sec:scripts:plot_data_mc}
+
+\paragraph{Purpose.} Produce overlay plots of data vs MC (corrected and
+uncorrected) per $|\eta|$ bin.
+
+\paragraph{Signature.}
+\begin{lstlisting}[style=cppstyle]
+int plot_data_mc(const char* histoFile, const char* plotDir);
+\end{lstlisting}
+
+\paragraph{Output.} Multi-page PDFs:
+\texttt{overlay\_\{reta,rphi,weta2\}.pdf}.
+
+\subsection{\texttt{plot\_cell\_profiles.C}}
+\label{sec:scripts:cell_profiles}
+
+\paragraph{Purpose.} Visualise $7\times11$ cell energy fraction maps and
+per-method correction residuals.
+
+\paragraph{Signature.}
+\begin{lstlisting}[style=cppstyle]
+int plot_cell_profiles(const char* corrFile,
+                       const char* plotDir,
+                       const char* channelLabel = "...");
+\end{lstlisting}
+
+\paragraph{Output.}
+\begin{itemize}
+  \item \texttt{cell\_profiles\_before.pdf}: Data vs uncorrected MC.
+  \item \texttt{cell\_profiles\_after\_m1.pdf}: Data vs M1-corrected MC.
+  \item \texttt{cell\_profiles\_after\_m2.pdf}: Data vs M2-corrected MC.
+  \item \texttt{cell\_profiles\_after\_m3.pdf}: Data vs M3-corrected MC.
+  \item \texttt{cell\_profiles\_delta.pdf}: Delta maps and sigma ratios.
+  \item \texttt{cell\_delta\_m1.pdf}: M1 residual
+    ($\langle f\rangle_\text{data} - \langle f\rangle_\text{M1}$).
+  \item \texttt{cell\_delta\_m2.pdf}: M2 residual.
+  \item \texttt{cell\_delta\_m3.pdf}: M3 residual.
+\end{itemize}
+
+\subsection{\texttt{plot\_stored\_vs\_computed.C}}
+\label{sec:scripts:stored_vs_computed}
+
+\paragraph{Purpose.} Overlay branch-stored shower shapes against
+cell-recomputed values to validate the computation.
+
+\paragraph{Signature.}
+\begin{lstlisting}[style=cppstyle]
+int plot_stored_vs_computed(const char* histoFile,
+                            const char* plotDir,
+                            const char* channelLabel = "...");
+\end{lstlisting}
+
+\paragraph{Output.} Multi-page PDFs:
+\texttt{stored\_vs\_computed\_\{reta,rphi,weta2\}.pdf}.
+
+\subsection{\texttt{plot\_fudge\_binned.C}}
+\label{sec:scripts:fudge}
+
+\paragraph{Purpose.} Validate standard fudge factors using TUNE27AD
+$\eta\times p_\text{T}$ binning.
+
+\paragraph{Signature.}
+\begin{lstlisting}[style=cppstyle]
+void plot_fudge_binned(Long64_t maxEv = -1,
+                       int isoLevel = 0);
+\end{lstlisting}
+
+\paragraph{Output.} PDFs in
+\texttt{data\_mc\_reweighting\_\{ISO\_TAG\}/\{channel\}/}:
+\texttt{fudge\_inclusive.pdf}, \texttt{fudge\_etabins.pdf},
+\texttt{fudge\_eta\_pt.pdf}, plus
+\texttt{fudge\_comparison\_\{reta,rphi,weta2\}.pdf}.
+
+% ============================================================================
+\section{Output Directory Structure}
+\label{sec:output}
+% ============================================================================
+
+Output is organised by isolation tag and channel:
+\begin{lstlisting}
+output/
+  data_mc_reweighting_{ISO_TAG}/
+    Zeeg/
+      corrections.root
+      histos.root
+      plots/
+        overlay_reta.pdf
+        overlay_rphi.pdf
+        overlay_weta2.pdf
+        cell_profiles_before.pdf
+        cell_profiles_after_m1.pdf
+        cell_profiles_after_m2.pdf
+        cell_profiles_after_m3.pdf
+        cell_profiles_delta.pdf
+        cell_delta_m1.pdf
+        cell_delta_m2.pdf
+        cell_delta_m3.pdf
+        stored_vs_computed_reta.pdf
+        stored_vs_computed_rphi.pdf
+        stored_vs_computed_weta2.pdf
+    Zmumug/
+      ...
+    combined/
+      ...
+    fudge_inclusive.pdf
+    fudge_etabins.pdf
+    ...
+\end{lstlisting}
+
+Where \texttt{ISO\_TAG} is one of: \texttt{no\_iso}, \texttt{iso\_tight},
+\texttt{iso\_track}, \texttt{iso\_full}.
+
+% ============================================================================
+\section{Running the Analysis}
+\label{sec:running}
+% ============================================================================
+
+\subsection{Single channel + isolation variant}
+
+\begin{lstlisting}
+cd scripts/data_mc/
+bash run_pipeline.sh Zeeg -1 iso_full 3
+\end{lstlisting}
+
+Arguments:
+\begin{enumerate}
+  \item Channel: \texttt{Zeeg}, \texttt{Zmumug}, or \texttt{combined}.
+  \item Max events: \texttt{-1} for all events.
+  \item Isolation tag: \texttt{no\_iso}, \texttt{iso\_tight},
+    \texttt{iso\_track}, \texttt{iso\_full}.
+  \item Isolation level: \texttt{0}--\texttt{3}, must match the tag.
+\end{enumerate}
+
+\subsection{All channels and isolation variants}
+
+\begin{lstlisting}
+bash run_all_channels.sh all -1
+\end{lstlisting}
+
+This runs all 12~combinations (4~isolation $\times$ 3~channels) plus the
+fudge factor validation for each isolation level.
+
+\subsection{Single isolation variant only}
+
+\begin{lstlisting}
+bash run_all_channels.sh iso_full -1
+\end{lstlisting}
+
+\subsection{Quick test with limited events}
+
+\begin{lstlisting}
+bash run_all_channels.sh no_iso 50000
+\end{lstlisting}
+
+% ============================================================================
+\section{Reproducibility}
+\label{sec:reproducibility}
+% ============================================================================
+
+The analysis is fully deterministic given the same input ntuples. To
+reproduce all results:
+
+\begin{enumerate}
+  \item Ensure access to the input ntuples at
+    \texttt{/dcache/atlas/mfernand/qt\_ntuples/data24/}.
+  \item Set up the ROOT environment as described in \cref{sec:requirements}.
+  \item Navigate to \texttt{scripts/data\_mc/} and run
+    \texttt{bash run\_all\_channels.sh all -1}.
+  \item Output appears in \texttt{output/data\_mc\_reweighting\_\{ISO\_TAG\}/}.
+\end{enumerate}
+
+All configuration parameters (cuts, binning, isolation thresholds, sigma
+ratio caps) are defined in \texttt{config.h}. Changing any parameter and
+rerunning the pipeline produces a new, self-consistent set of results.
+
+\end{document}
