@@ -5,6 +5,9 @@ ntuples/
 output/
 plots/
 
+# Compiled binaries
+scripts/data_mc/fill_histograms
+
 # ROOT files in analysis root
 *.root
 
@@ -18,6 +21,18 @@ __pycache__/
 *~
 .DS_Store
 .asetup.save
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+
+# Generated PDFs (from LaTeX)
+report/*.pdf
 
 # Compressed archives
 *.tgz

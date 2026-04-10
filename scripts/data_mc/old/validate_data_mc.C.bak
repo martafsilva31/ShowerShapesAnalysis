@@ -1,0 +1,491 @@
+///////////////////////////////////////////////////////////////////////////////
+// validate_data_mc.C
+//
+// Applies cell-energy corrections inline and produces comparison histograms.
+// Reads corrections from derive_corrections.C output.  Processes data once
+// and MC once, applying both correction methods in the same MC loop.
+//
+// Produces 5 sets of histograms × 3 shower shapes × 14 eta bins:
+//   1. data  — Data shower shapes (cell-computed, position-based)
+//   2. mc    — MC unfudged (cell-computed, position-based)
+//   3. fud   — MC fudged (from branch values, after ATLAS fudge factors)
+//   4. m1    — MC reweighted method 1 (flat shift, clamped, cell-computed)
+//   5. m2    — MC reweighted method 2 (mean+RMS rescaling, clamped, cell-computed)
+//   6. m3    — MC reweighted method 3 (multiplicative ratio, cell-computed)
+//
+// Data, MC unfudged, M1–M3 all use position-based cell computation for
+// consistent comparison.  Fudged MC uses branch values (ATLAS reference).
+// M1/M2 clamp negative corrected fractions to 0 before renormalization.
+// M3 uses f_corr = f_MC × (meanData/meanMC), naturally positive.
+//
+// Usage:
+//   root -l -b -q 'validate_data_mc.C("data.root","mc.root","corr.root","histos.root")'
+//   root -l -b -q 'validate_data_mc.C("data.root","mc.root","corr.root","histos.root",500000)'
+///////////////////////////////////////////////////////////////////////////////
+
+#include "config.h"
+
+#include <TFile.h>
+#include <TTree.h>
+#include <TH1D.h>
+#include <TH2D.h>
+#include <iostream>
+#include <vector>
+#include <cmath>
+
+using namespace datamc;
+
+// ======================================================================
+// Chi2 between two area-normalised histograms
+// ======================================================================
+double computeChi2(TH1D* h1, TH1D* h2, int& ndf) {
+    double chi2 = 0;
+    ndf = 0;
+    for (int b = 1; b <= h1->GetNbinsX(); ++b) {
+        double v1 = h1->GetBinContent(b);
+        double v2 = h2->GetBinContent(b);
+        if (v2 > 0) {
+            chi2 += (v1 - v2) * (v1 - v2) / v2;
+            ndf++;
+        }
+    }
+    return chi2;
+}
+
+// ======================================================================
+// Main
+// ======================================================================
+int validate_data_mc(const char* dataFile,
+                     const char* mcFile,
+                     const char* corrFile,
+                     const char* histoFile,
+                     Long64_t maxEvents = -1) {
+
+    // ==================================================================
+    // Load corrections
+    // ==================================================================
+    TFile* fcorr = TFile::Open(corrFile, "READ");
+    if (!fcorr || fcorr->IsZombie()) {
+        std::cerr << "ERROR: Cannot open corrections: " << corrFile << std::endl;
+        return 1;
+    }
+
+    double flatShift[kClusterSize][kNEtaBins] = {};
+    double meanMC_corr[kClusterSize][kNEtaBins] = {};
+    double meanData_corr[kClusterSize][kNEtaBins] = {};
+    double rmsMC_corr[kClusterSize][kNEtaBins] = {};
+    double rmsData_corr[kClusterSize][kNEtaBins] = {};
+
+    for (int n = 0; n < kNEtaBins; ++n) {
+        TString suffix = Form("Eta_%1.2f_%1.2f",
+                              kEtaLimits[n], kEtaLimits[n + 1]);
+
+        TH2D* h_s  = (TH2D*)fcorr->Get("shift_" + suffix);
+        TH2D* h_mM = (TH2D*)fcorr->Get("meanMC_" + suffix);
+        TH2D* h_mD = (TH2D*)fcorr->Get("meanData_" + suffix);
+        TH2D* h_rM = (TH2D*)fcorr->Get("rmsMC_" + suffix);
+        TH2D* h_rD = (TH2D*)fcorr->Get("rmsData_" + suffix);
+
+        if (!h_s || !h_mM || !h_mD || !h_rM || !h_rD) {
+            std::cerr << "ERROR: Missing correction histogram for eta bin "
+                      << n << std::endl;
+            return 1;
+        }
+
+        for (int k = 0; k < kClusterSize; ++k) {
+            int phi_bin = k % kPhiSize;
+            int eta_bin = k / kPhiSize;
+            flatShift[k][n]     = h_s->GetBinContent(phi_bin + 1, eta_bin + 1);
+            meanMC_corr[k][n]   = h_mM->GetBinContent(phi_bin + 1, eta_bin + 1);
+            meanData_corr[k][n] = h_mD->GetBinContent(phi_bin + 1, eta_bin + 1);
+            rmsMC_corr[k][n]    = h_rM->GetBinContent(phi_bin + 1, eta_bin + 1);
+            rmsData_corr[k][n]  = h_rD->GetBinContent(phi_bin + 1, eta_bin + 1);
+        }
+    }
+    std::cout << "Corrections loaded from: " << corrFile << std::endl;
+
+    // ==================================================================
+    // Create histograms: 5 samples × 3 vars × 14 eta bins
+    // ==================================================================
+    TH1D* h_reta_data[kNEtaBins], *h_reta_mc[kNEtaBins],
+         *h_reta_fud[kNEtaBins],  *h_reta_m1[kNEtaBins],
+         *h_reta_m2[kNEtaBins],   *h_reta_m3[kNEtaBins];
+    TH1D* h_rphi_data[kNEtaBins], *h_rphi_mc[kNEtaBins],
+         *h_rphi_fud[kNEtaBins],  *h_rphi_m1[kNEtaBins],
+         *h_rphi_m2[kNEtaBins],   *h_rphi_m3[kNEtaBins];
+    TH1D* h_weta2_data[kNEtaBins], *h_weta2_mc[kNEtaBins],
+         *h_weta2_fud[kNEtaBins],  *h_weta2_m1[kNEtaBins],
+         *h_weta2_m2[kNEtaBins],   *h_weta2_m3[kNEtaBins];
+
+    for (int n = 0; n < kNEtaBins; ++n) {
+        TString s = Form("_%d", n);
+
+        h_reta_data[n] = new TH1D("reta_data" + s, "", 25, 0.90, 1.0);
+        h_reta_mc[n]   = new TH1D("reta_mc" + s,   "", 25, 0.90, 1.0);
+        h_reta_fud[n]  = new TH1D("reta_fud" + s,  "", 25, 0.90, 1.0);
+        h_reta_m1[n]   = new TH1D("reta_m1" + s,   "", 25, 0.90, 1.0);
+        h_reta_m2[n]   = new TH1D("reta_m2" + s,   "", 25, 0.90, 1.0);
+        h_reta_m3[n]   = new TH1D("reta_m3" + s,   "", 25, 0.90, 1.0);
+
+        h_rphi_data[n] = new TH1D("rphi_data" + s, "", 25, 0.85, 1.0);
+        h_rphi_mc[n]   = new TH1D("rphi_mc" + s,   "", 25, 0.85, 1.0);
+        h_rphi_fud[n]  = new TH1D("rphi_fud" + s,  "", 25, 0.85, 1.0);
+        h_rphi_m1[n]   = new TH1D("rphi_m1" + s,   "", 25, 0.85, 1.0);
+        h_rphi_m2[n]   = new TH1D("rphi_m2" + s,   "", 25, 0.85, 1.0);
+        h_rphi_m3[n]   = new TH1D("rphi_m3" + s,   "", 25, 0.85, 1.0);
+
+        h_weta2_data[n] = new TH1D("weta2_data" + s, "", 25, 0.008, 0.016);
+        h_weta2_mc[n]   = new TH1D("weta2_mc" + s,   "", 25, 0.008, 0.016);
+        h_weta2_fud[n]  = new TH1D("weta2_fud" + s,  "", 25, 0.008, 0.016);
+        h_weta2_m1[n]   = new TH1D("weta2_m1" + s,   "", 25, 0.008, 0.016);
+        h_weta2_m2[n]   = new TH1D("weta2_m2" + s,   "", 25, 0.008, 0.016);
+        h_weta2_m3[n]   = new TH1D("weta2_m3" + s,   "", 25, 0.008, 0.016);
+
+        // Sumw2 for proper error propagation with MC weights
+        h_reta_data[n]->Sumw2(); h_reta_mc[n]->Sumw2();
+        h_reta_fud[n]->Sumw2();  h_reta_m1[n]->Sumw2();
+        h_reta_m2[n]->Sumw2();  h_reta_m3[n]->Sumw2();
+        h_rphi_data[n]->Sumw2(); h_rphi_mc[n]->Sumw2();
+        h_rphi_fud[n]->Sumw2();  h_rphi_m1[n]->Sumw2();
+        h_rphi_m2[n]->Sumw2();   h_rphi_m3[n]->Sumw2();
+        h_weta2_data[n]->Sumw2(); h_weta2_mc[n]->Sumw2();
+        h_weta2_fud[n]->Sumw2();  h_weta2_m1[n]->Sumw2();
+        h_weta2_m2[n]->Sumw2();   h_weta2_m3[n]->Sumw2();
+    }
+
+    // ==================================================================
+    // Helper: enable a branch safely
+    // ==================================================================
+    auto enableBranch = [](TTree* t, const char* name, void* addr) {
+        if (t->GetBranch(name)) {
+            t->SetBranchStatus(name, 1);
+            t->SetBranchAddress(name, addr);
+        } else {
+            std::cerr << "WARNING: Branch '" << name << "' not found" << std::endl;
+        }
+    };
+
+    // ==================================================================
+    // Loop 1: Data — use BRANCH shower shapes (correct ATLAS computation).
+    // Cell energies still read for quality check (central cell hottest).
+    // ==================================================================
+    std::cout << "\n=== Processing Data ===" << std::endl;
+    {
+        TFile* f = TFile::Open(dataFile, "READ");
+        if (!f || f->IsZombie()) {
+            std::cerr << "ERROR: Cannot open " << dataFile << std::endl;
+            return 1;
+        }
+        TTree* t = (TTree*)f->Get(kTreeName);
+        if (!t) {
+            std::cerr << "ERROR: No tree in " << dataFile << std::endl;
+            return 1;
+        }
+
+        std::vector<double>* cellE = nullptr;
+        std::vector<double>* cellEta = nullptr;
+        std::vector<double>* cellPhi = nullptr;
+        Int_t cellSize = 0;
+        Float_t eta2 = 0, photonPt = 0, etamax2 = 0;
+        Double_t mll_val = 0, mllg_val = 0;
+        Double_t dR_l1_ph = 0, dR_l2_ph = 0;
+        Double_t dR_ll = 0;
+
+        t->SetBranchStatus("*", 0);
+        enableBranch(t, kCellBranch, &cellE);
+        enableBranch(t, kCellEtaBranch, &cellEta);
+        enableBranch(t, kCellPhiBranch, &cellPhi);
+        enableBranch(t, kCellSizeBranch, &cellSize);
+        enableBranch(t, kEtaBranch, &eta2);
+        enableBranch(t, kEtamax2Branch, &etamax2);
+        enableBranch(t, kPhotonPtBranch, &photonPt);
+        enableBranch(t, kMllBranch, &mll_val);
+        enableBranch(t, kMllgBranch, &mllg_val);
+        enableBranch(t, kDRLepton1Branch, &dR_l1_ph);
+        enableBranch(t, kDRLepton2Branch, &dR_l2_ph);
+        enableBranch(t, kDRllBranch, &dR_ll);
+
+        Long64_t nEntries = t->GetEntries();
+        if (maxEvents > 0 && maxEvents < nEntries) nEntries = maxEvents;
+        std::cout << "Data: " << dataFile << " (" << nEntries
+                  << " entries)" << std::endl;
+
+        Long64_t nUsed = 0;
+        for (Long64_t i = 0; i < nEntries; ++i) {
+            t->GetEntry(i);
+            if (i > 0 && i % 2000000 == 0)
+                std::cout << "  " << i << " / " << nEntries << std::endl;
+
+            if (!passSelection(photonPt, eta2, mll_val, mllg_val,
+                               dR_l1_ph, dR_l2_ph, dR_ll,
+                               cellSize, true, false))
+                continue;
+            if (!cellE || (int)cellE->size() != kClusterSize) continue;
+
+            int etaBin = findEtaBin(std::fabs(eta2));
+            if (etaBin < 0) continue;
+
+            // Quality check on clamped copy
+            {
+                std::vector<double> clamped(*cellE);
+                clampCellEnergies(clamped);
+                if (!isHealthyCluster(clamped)) continue;
+            }
+
+            // Fill from cell-computed values (position-based)
+            if (!cellEta || !cellPhi) continue;
+            h_reta_data[etaBin]->Fill(calcRetaPos(*cellE, *cellEta, *cellPhi));
+            h_rphi_data[etaBin]->Fill(calcRphiPos(*cellE, *cellEta, *cellPhi));
+            h_weta2_data[etaBin]->Fill(calcWeta2Pos(*cellE, *cellEta, *cellPhi, eta2, etamax2));
+            nUsed++;
+        }
+        std::cout << "  Selected: " << nUsed << " events" << std::endl;
+        f->Close(); delete f;
+    }
+
+    // ==================================================================
+    // Loop 2: MC — branch values for unfudged/fudged baselines,
+    // cell-computed (no clamping) for M1/M2 reweighted.
+    // ==================================================================
+    std::cout << "\n=== Processing MC ===" << std::endl;
+    {
+        TFile* f = TFile::Open(mcFile, "READ");
+        if (!f || f->IsZombie()) {
+            std::cerr << "ERROR: Cannot open " << mcFile << std::endl;
+            return 1;
+        }
+        TTree* t = (TTree*)f->Get(kTreeName);
+        if (!t) {
+            std::cerr << "ERROR: No tree in " << mcFile << std::endl;
+            return 1;
+        }
+
+        std::vector<double>* cellE = nullptr;
+        std::vector<double>* cellEta = nullptr;
+        std::vector<double>* cellPhi = nullptr;
+        Int_t cellSize = 0;
+        Float_t eta2 = 0, photonPt = 0, etamax2 = 0;
+        Double_t mll_val = 0, mllg_val = 0;
+        Double_t dR_l1_ph = 0, dR_l2_ph = 0;
+        Double_t dR_ll = 0;
+        Bool_t truthMatch = false;
+
+        // MC weights
+        Float_t mcwgt = 1, muwgt = 1, bswgt = 1;
+        Double_t lep1SF = 1, lep2SF = 1;
+
+        // Branch shower shapes (fudged and unfudged)
+        Float_t reta_fud_val = 0, rphi_fud_val = 0, weta2_fud_val = 0;
+        Float_t reta_unf_val = 0, rphi_unf_val = 0, weta2_unf_val = 0;
+
+        t->SetBranchStatus("*", 0);
+        enableBranch(t, kCellBranch, &cellE);
+        enableBranch(t, kCellEtaBranch, &cellEta);
+        enableBranch(t, kCellPhiBranch, &cellPhi);
+        enableBranch(t, kCellSizeBranch, &cellSize);
+        enableBranch(t, kEtaBranch, &eta2);
+        enableBranch(t, kEtamax2Branch, &etamax2);
+        enableBranch(t, kPhotonPtBranch, &photonPt);
+        enableBranch(t, kMllBranch, &mll_val);
+        enableBranch(t, kMllgBranch, &mllg_val);
+        enableBranch(t, kDRLepton1Branch, &dR_l1_ph);
+        enableBranch(t, kDRLepton2Branch, &dR_l2_ph);
+        enableBranch(t, kDRllBranch, &dR_ll);
+        enableBranch(t, kTruthMatchBranch, &truthMatch);
+        enableBranch(t, kMCWeightBranch, &mcwgt);
+        enableBranch(t, kPUWeightBranch, &muwgt);
+        enableBranch(t, kBSWeightBranch, &bswgt);
+        enableBranch(t, kLepton1SFBranch, &lep1SF);
+        enableBranch(t, kLepton2SFBranch, &lep2SF);
+        enableBranch(t, kRetaFudBranch, &reta_fud_val);
+        enableBranch(t, kRphiFudBranch, &rphi_fud_val);
+        enableBranch(t, kWeta2FudBranch, &weta2_fud_val);
+        enableBranch(t, kRetaUnfBranch, &reta_unf_val);
+        enableBranch(t, kRphiUnfBranch, &rphi_unf_val);
+        enableBranch(t, kWeta2UnfBranch, &weta2_unf_val);
+
+        Long64_t nEntries = t->GetEntries();
+        if (maxEvents > 0 && maxEvents < nEntries) nEntries = maxEvents;
+        std::cout << "MC: " << mcFile << " (" << nEntries
+                  << " entries)" << std::endl;
+
+        Long64_t nUsed = 0;
+        for (Long64_t i = 0; i < nEntries; ++i) {
+            t->GetEntry(i);
+            if (i > 0 && i % 2000000 == 0)
+                std::cout << "  " << i << " / " << nEntries << std::endl;
+
+            if (!passSelection(photonPt, eta2, mll_val, mllg_val,
+                               dR_l1_ph, dR_l2_ph, dR_ll,
+                               cellSize, truthMatch, true))
+                continue;
+            if (!cellE || (int)cellE->size() != kClusterSize) continue;
+            if (!cellEta || !cellPhi) continue;
+
+            int etaBin = findEtaBin(std::fabs(eta2));
+            if (etaBin < 0) continue;
+
+            // Quality check on clamped copy
+            {
+                std::vector<double> clamped(*cellE);
+                clampCellEnergies(clamped);
+                if (!isHealthyCluster(clamped)) continue;
+            }
+
+            double w = mcwgt * muwgt * bswgt * lep1SF * lep2SF;
+
+            // --- MC unfudged (cell-computed, position-based) ---
+            h_reta_mc[etaBin]->Fill(calcRetaPos(*cellE, *cellEta, *cellPhi), w);
+            h_rphi_mc[etaBin]->Fill(calcRphiPos(*cellE, *cellEta, *cellPhi), w);
+            h_weta2_mc[etaBin]->Fill(calcWeta2Pos(*cellE, *cellEta, *cellPhi, eta2, etamax2), w);
+
+            // --- MC fudged (from branch) ---
+            h_reta_fud[etaBin]->Fill(reta_fud_val, w);
+            h_rphi_fud[etaBin]->Fill(rphi_fud_val, w);
+            h_weta2_fud[etaBin]->Fill(weta2_fud_val, w);
+
+            // --- Cell fractions from RAW cells (no clamping) ---
+            double Etot = 0;
+            for (int k = 0; k < kClusterSize; ++k) Etot += cellE->at(k);
+            if (Etot <= 0) continue;
+
+            // --- Method 1: flat shift (clamped) ---
+            {
+                std::vector<double> corrCells(kClusterSize);
+                for (int k = 0; k < kClusterSize; ++k) {
+                    double fMC = cellE->at(k) / Etot;
+                    corrCells[k] = fMC + flatShift[k][etaBin];
+                    if (corrCells[k] < 0) corrCells[k] = 0;
+                }
+                double sumCorr = 0;
+                for (int k = 0; k < kClusterSize; ++k) sumCorr += corrCells[k];
+                if (sumCorr > 1e-12)
+                    for (int k = 0; k < kClusterSize; ++k)
+                        corrCells[k] = corrCells[k] / sumCorr * Etot;
+                h_reta_m1[etaBin]->Fill(calcRetaPos(corrCells, *cellEta, *cellPhi), w);
+                h_rphi_m1[etaBin]->Fill(calcRphiPos(corrCells, *cellEta, *cellPhi), w);
+                h_weta2_m1[etaBin]->Fill(calcWeta2Pos(corrCells, *cellEta, *cellPhi, eta2, etamax2), w);
+            }
+
+            // --- Method 2: mean+RMS rescaling (clamped) ---
+            {
+                std::vector<double> corrCells(kClusterSize);
+                for (int k = 0; k < kClusterSize; ++k) {
+                    double fMC = cellE->at(k) / Etot;
+                    double scale = (rmsMC_corr[k][etaBin] > 1e-12)
+                        ? rmsData_corr[k][etaBin] / rmsMC_corr[k][etaBin]
+                        : 1.0;
+                    corrCells[k] = scale * (fMC - meanMC_corr[k][etaBin])
+                                   + meanData_corr[k][etaBin];
+                    if (corrCells[k] < 0) corrCells[k] = 0;
+                }
+                double sumCorr = 0;
+                for (int k = 0; k < kClusterSize; ++k) sumCorr += corrCells[k];
+                if (sumCorr > 1e-12)
+                    for (int k = 0; k < kClusterSize; ++k)
+                        corrCells[k] = corrCells[k] / sumCorr * Etot;
+                h_reta_m2[etaBin]->Fill(calcRetaPos(corrCells, *cellEta, *cellPhi), w);
+                h_rphi_m2[etaBin]->Fill(calcRphiPos(corrCells, *cellEta, *cellPhi), w);
+                h_weta2_m2[etaBin]->Fill(calcWeta2Pos(corrCells, *cellEta, *cellPhi, eta2, etamax2), w);
+            }
+
+            // --- Method 3: multiplicative ratio ---
+            {
+                std::vector<double> corrCells(kClusterSize);
+                for (int k = 0; k < kClusterSize; ++k) {
+                    double fMC = cellE->at(k) / Etot;
+                    double ratio = (meanMC_corr[k][etaBin] > 1e-8)
+                        ? meanData_corr[k][etaBin] / meanMC_corr[k][etaBin]
+                        : 1.0;
+                    corrCells[k] = fMC * ratio;
+                }
+                double sumCorr = 0;
+                for (int k = 0; k < kClusterSize; ++k) sumCorr += corrCells[k];
+                if (sumCorr > 1e-12)
+                    for (int k = 0; k < kClusterSize; ++k)
+                        corrCells[k] = corrCells[k] / sumCorr * Etot;
+                h_reta_m3[etaBin]->Fill(calcRetaPos(corrCells, *cellEta, *cellPhi), w);
+                h_rphi_m3[etaBin]->Fill(calcRphiPos(corrCells, *cellEta, *cellPhi), w);
+                h_weta2_m3[etaBin]->Fill(calcWeta2Pos(corrCells, *cellEta, *cellPhi, eta2, etamax2), w);
+            }
+
+            nUsed++;
+        }
+        std::cout << "  Selected: " << nUsed << " events" << std::endl;
+        f->Close(); delete f;
+    }
+
+    // ==================================================================
+    // Normalise and compute chi2
+    // ==================================================================
+    auto safeNorm = [](TH1D* h) {
+        double integral = h->Integral();
+        if (integral > 0) h->Scale(1.0 / integral);
+    };
+
+    std::cout << "\n=== Chi2 vs Data (per eta bin) ===" << std::endl;
+    std::cout << "EtaBin |  R_eta: MC   Fud    M1    M2    M3  |"
+              << "  R_phi: MC   Fud    M1    M2    M3  |"
+              << " w_eta2: MC   Fud    M1    M2    M3" << std::endl;
+    std::cout << "-------|-------------------------------------|"
+              << "-------------------------------------|"
+              << "-------------------------------------" << std::endl;
+
+    for (int n = 0; n < kNEtaBins; ++n) {
+        if (h_reta_data[n]->GetEntries() < 100) continue;
+
+        safeNorm(h_reta_data[n]); safeNorm(h_reta_mc[n]);
+        safeNorm(h_reta_fud[n]);  safeNorm(h_reta_m1[n]);
+        safeNorm(h_reta_m2[n]);   safeNorm(h_reta_m3[n]);
+        safeNorm(h_rphi_data[n]); safeNorm(h_rphi_mc[n]);
+        safeNorm(h_rphi_fud[n]);  safeNorm(h_rphi_m1[n]);
+        safeNorm(h_rphi_m2[n]);   safeNorm(h_rphi_m3[n]);
+        safeNorm(h_weta2_data[n]); safeNorm(h_weta2_mc[n]);
+        safeNorm(h_weta2_fud[n]);  safeNorm(h_weta2_m1[n]);
+        safeNorm(h_weta2_m2[n]);   safeNorm(h_weta2_m3[n]);
+
+        int ndf;
+        std::cout << Form(
+            "%6d | %6.2f %5.2f %5.2f %5.2f %5.2f |"
+            " %6.2f %5.2f %5.2f %5.2f %5.2f |"
+            " %6.2f %5.2f %5.2f %5.2f %5.2f",
+            n,
+            computeChi2(h_reta_mc[n],  h_reta_data[n], ndf),
+            computeChi2(h_reta_fud[n], h_reta_data[n], ndf),
+            computeChi2(h_reta_m1[n],  h_reta_data[n], ndf),
+            computeChi2(h_reta_m2[n],  h_reta_data[n], ndf),
+            computeChi2(h_reta_m3[n],  h_reta_data[n], ndf),
+            computeChi2(h_rphi_mc[n],  h_rphi_data[n], ndf),
+            computeChi2(h_rphi_fud[n], h_rphi_data[n], ndf),
+            computeChi2(h_rphi_m1[n],  h_rphi_data[n], ndf),
+            computeChi2(h_rphi_m2[n],  h_rphi_data[n], ndf),
+            computeChi2(h_rphi_m3[n],  h_rphi_data[n], ndf),
+            computeChi2(h_weta2_mc[n],  h_weta2_data[n], ndf),
+            computeChi2(h_weta2_fud[n], h_weta2_data[n], ndf),
+            computeChi2(h_weta2_m1[n],  h_weta2_data[n], ndf),
+            computeChi2(h_weta2_m2[n],  h_weta2_data[n], ndf),
+            computeChi2(h_weta2_m3[n],  h_weta2_data[n], ndf)
+            ) << std::endl;
+    }
+
+    // ==================================================================
+    // Write output
+    // ==================================================================
+    TFile* fout = TFile::Open(histoFile, "RECREATE");
+    for (int n = 0; n < kNEtaBins; ++n) {
+        h_reta_data[n]->Write(); h_reta_mc[n]->Write();
+        h_reta_fud[n]->Write();  h_reta_m1[n]->Write();
+        h_reta_m2[n]->Write();  h_reta_m3[n]->Write();
+        h_rphi_data[n]->Write(); h_rphi_mc[n]->Write();
+        h_rphi_fud[n]->Write();  h_rphi_m1[n]->Write();
+        h_rphi_m2[n]->Write();   h_rphi_m3[n]->Write();
+        h_weta2_data[n]->Write(); h_weta2_mc[n]->Write();
+        h_weta2_fud[n]->Write();  h_weta2_m1[n]->Write();
+        h_weta2_m2[n]->Write();   h_weta2_m3[n]->Write();
+    }
+    fout->Close(); delete fout;
+
+    std::cout << "\nHistograms written to: " << histoFile << std::endl;
+    fcorr->Close(); delete fcorr;
+    return 0;
+}
