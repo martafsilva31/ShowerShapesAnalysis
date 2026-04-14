@@ -113,14 +113,18 @@ void drawPanel(std::vector<TH1D*>& histos,
     hRef->SetTitle("");
     hRef->SetStats(0);
 
-    // Zero data error bars (markers only, like Francisco)
-    for (int b = 0; b <= hRef->GetNbinsX() + 1; ++b)
-        hRef->SetBinError(b, 0);
-
-    hRef->Draw("P");
-    for (size_t i = 1; i < histos.size(); ++i)
+    // Draw with error bars: data as points+errors, MC as filled band + line
+    hRef->Draw("E P X0");
+    for (size_t i = 1; i < histos.size(); ++i) {
+        // Draw error band (semi-transparent fill)
+        TH1D* hBand = (TH1D*)histos[i]->Clone(
+            Form("%s_band_%d", histos[i]->GetName(), etaBin));
+        hBand->SetFillColorAlpha(colors[i], 0.15);
+        hBand->SetLineWidth(0);
+        hBand->Draw("E2 SAME");
         histos[i]->Draw("HIST SAME");
-    hRef->Draw("P SAME");  // redraw on top
+    }
+    hRef->Draw("E P SAME X0");  // redraw on top
 
     // Legend
     TLegend* leg = new TLegend(0.52, 0.60, 0.89, 0.89);
@@ -128,7 +132,7 @@ void drawPanel(std::vector<TH1D*>& histos,
     leg->SetFillStyle(0);
     leg->SetTextSize(0.030);
     for (size_t i = 0; i < histos.size(); ++i)
-        leg->AddEntry(histos[i], labels[i], (i == 0) ? "p" : "l");
+        leg->AddEntry(histos[i], labels[i], (i == 0) ? "ep" : "lf");
     leg->Draw();
 
     // ATLAS label
@@ -183,7 +187,18 @@ void drawPanel(std::vector<TH1D*>& histos,
         ratio->SetTitle("");
         ratio->SetStats(0);
 
-        ratio->Draw(firstRatio ? "HIST" : "HIST SAME");
+        // Draw error band + line for ratio
+        TH1D* rBand = (TH1D*)ratio->Clone(
+            Form("ratio_band_%zu_%d", i, etaBin));
+        rBand->SetFillColorAlpha(colors[i], 0.15);
+        rBand->SetLineWidth(0);
+        if (firstRatio) {
+            rBand->Draw("E2");
+            ratio->Draw("HIST SAME");
+        } else {
+            rBand->Draw("E2 SAME");
+            ratio->Draw("HIST SAME");
+        }
         firstRatio = false;
     }
 

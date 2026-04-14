@@ -48,6 +48,9 @@ if [[ "${BATCH}" == true ]]; then
             echo ">>> plot_shower_shapes.C"
             root -l -b -q "plot_shower_shapes.C(\"${ch}\", \"${sc}\", \"${BASE_DIR}\")"
             root -l -b -q "plot_shower_shapes.C(\"${ch}\", \"${sc}\", \"${BASE_DIR}\", 2)"
+            root -l -b -q "plot_shower_shapes.C(\"${ch}\", \"${sc}\", \"${BASE_DIR}\", 4)"
+            echo ">>> plot_kinematics.C"
+            root -l -b -q "plot_kinematics.C(\"${ch}\", \"${sc}\", \"${BASE_DIR}\")"
             echo ">>> plot_cell_profiles.C"
             root -l -b -q "plot_cell_profiles.C(\"${ch}\", \"${sc}\", \"${BASE_DIR}\")"
         done
@@ -88,9 +91,14 @@ echo ">>> Step 2: plot_shower_shapes.C"
 root -l -b -q "plot_shower_shapes.C(\"${CHANNEL}\", \"${SCENARIO}\", \"${BASE_DIR}\")"
 root -l -b -q "plot_shower_shapes.C(\"${CHANNEL}\", \"${SCENARIO}\", \"${BASE_DIR}\", 2)"
 
-# Step 3: Cell profile plots
+# Step 3: Kinematics + zero-padding plots
 echo ""
-echo ">>> Step 3: plot_cell_profiles.C"
+echo ">>> Step 3: plot_kinematics.C"
+root -l -b -q "plot_kinematics.C(\"${CHANNEL}\", \"${SCENARIO}\", \"${BASE_DIR}\")"
+
+# Step 4: Cell profile plots
+echo ""
+echo ">>> Step 4: plot_cell_profiles.C"
 root -l -b -q "plot_cell_profiles.C(\"${CHANNEL}\", \"${SCENARIO}\", \"${BASE_DIR}\")"
 
 OUT_DIR="${BASE_DIR}/${CHANNEL}/${SCENARIO}"

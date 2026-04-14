@@ -31,7 +31,8 @@ using namespace config;
 // ============================================================
 // Shower-shape histogram helpers
 // ============================================================
-const int kNBins = 50;
+const int kNBins = 100;
+const bool kExcludeZeroPadFromCorr = true;  // skip zero-padded events in correction derivation
 enum SS { kReta = 0, kRphi = 1, kWeta2 = 2, kNSS = 3 };
 static const char* ssName[kNSS]  = {"reta", "rphi", "weta2"};
 static const char* ssTitle[kNSS] = {"R_{#eta}", "R_{#phi}", "w_{#eta 2}"};
@@ -120,13 +121,17 @@ void fill_histograms(const char* channel  = "eegamma",
     TH1D *h_m_eta[kNSS][kNEtaBins];   // cell-computed MC
     TH1D *h_m_M1_eta[kNSS][kNEtaBins];
     TH1D *h_m_M2_eta[kNSS][kNEtaBins];
+    TH1D *h_d_stor_eta[kNSS][kNEtaBins];  // branch-stored data (per-eta)
+    TH1D *h_m_fudg_eta[kNSS][kNEtaBins];  // fudged MC (per-eta)
     for (int s = 0; s < kNSS; ++s)
         for (int e = 0; e < kNEtaBins; ++e) {
             TString suf = Form("_eta%02d", e);
-            h_d_eta[s][e]    = makeSS(s, "data",  suf.Data());
-            h_m_eta[s][e]    = makeSS(s, "mc",    suf.Data());
-            h_m_M1_eta[s][e] = makeSS(s, "mc_M1", suf.Data());
-            h_m_M2_eta[s][e] = makeSS(s, "mc_M2", suf.Data());
+            h_d_eta[s][e]      = makeSS(s, "data",         suf.Data());
+            h_m_eta[s][e]      = makeSS(s, "mc",           suf.Data());
+            h_m_M1_eta[s][e]   = makeSS(s, "mc_M1",        suf.Data());
+            h_m_M2_eta[s][e]   = makeSS(s, "mc_M2",        suf.Data());
+            h_d_stor_eta[s][e] = makeSS(s, "data_stored",  suf.Data());
+            h_m_fudg_eta[s][e] = makeSS(s, "mc_fudged",    suf.Data());
         }
 
     // --- Event counts per eta bin ---
@@ -136,6 +141,36 @@ void fill_histograms(const char* channel  = "eegamma",
     TH1D* h_cnt_m = new TH1D("h_counts_mc",
         "Passing events per #eta bin (MC, weighted);#eta bin;events",
         kNEtaBins, 0, kNEtaBins);
+
+    // --- pT and eta distributions ---
+    TH1D* h_pt_d = new TH1D("h_pt_data",
+        "Photon p_{T} (data);p_{T} [GeV];Events / 2 GeV",
+        50, 0, 100);
+    TH1D* h_pt_m = new TH1D("h_pt_mc",
+        "Photon p_{T} (MC);p_{T} [GeV];Events / 2 GeV",
+        50, 0, 100);
+    TH1D* h_eta_d = new TH1D("h_eta_data",
+        "Photon |#eta| (data);|#eta|;Events",
+        48, 0, 2.4);
+    TH1D* h_eta_m = new TH1D("h_eta_mc",
+        "Photon |#eta| (MC);|#eta|;Events",
+        48, 0, 2.4);
+    TH1D* h_pt_m_nosf = new TH1D("h_pt_mc_nosf",
+        "Photon p_{T} (MC, no SFs);p_{T} [GeV];Events / 2 GeV",
+        50, 0, 100);
+    TH1D* h_eta_m_nosf = new TH1D("h_eta_mc_nosf",
+        "Photon |#eta| (MC, no SFs);|#eta|;Events",
+        48, 0, 2.4);
+
+    // --- Zero-padding diagnostics ---
+    Long64_t nZeroPad_d = 0, nTotal_d = 0;
+    Long64_t nZeroPad_m = 0, nTotal_m = 0;
+    TH1D* h_nzero_d = new TH1D("h_nzero_data",
+        "Cells with E=0 per event (data);N_{zero};Events",
+        78, 0, 78);
+    TH1D* h_nzero_m = new TH1D("h_nzero_mc",
+        "Cells with E=0 per event (MC);N_{zero};Events",
+        78, 0, 78);
 
     // ============================================================
     //  ACCUMULATION ARRAYS  (Pass 1)
@@ -159,7 +194,9 @@ void fill_histograms(const char* channel  = "eegamma",
     Double_t vmll, vmllg, vdrl1, vdrl2, vdrll;
     Bool_t  visconv, vtight, visoL, visoT, vtruth;
     Int_t   vcellSz;
-    Float_t vmcw, vmuw, vxsec;
+    Float_t vmcw, vmuw;
+    UInt_t  vmcch;
+    Double_t vl1sf, vl2sf, vphIsosf;
     Float_t vreta, vrphi, vweta2;
     Float_t vretaU, vrphiU, vweta2U;
     std::vector<double>* vcellE = nullptr;
@@ -190,13 +227,16 @@ void fill_histograms(const char* channel  = "eegamma",
 
     auto setBrMC = [&](TTree* t) {
         setBrCommon(t);
-        t->SetBranchAddress(kMCWeightBranch,   &vmcw);
-        t->SetBranchAddress(kPUWeightBranch,   &vmuw);
-        t->SetBranchAddress(kXSecBranch,       &vxsec);
-        t->SetBranchAddress(kTruthMatchBranch, &vtruth);
-        t->SetBranchAddress(kRetaUnfBranch,    &vretaU);
-        t->SetBranchAddress(kRphiUnfBranch,    &vrphiU);
-        t->SetBranchAddress(kWeta2UnfBranch,   &vweta2U);
+        t->SetBranchAddress(kMCWeightBranch,    &vmcw);
+        t->SetBranchAddress(kPUWeightBranch,    &vmuw);
+        t->SetBranchAddress("mcChannelNumber",  &vmcch);
+        t->SetBranchAddress(kTruthMatchBranch,  &vtruth);
+        t->SetBranchAddress(kRetaUnfBranch,     &vretaU);
+        t->SetBranchAddress(kRphiUnfBranch,     &vrphiU);
+        t->SetBranchAddress(kWeta2UnfBranch,    &vweta2U);
+        t->SetBranchAddress(kLepton1SFBranch,   &vl1sf);
+        t->SetBranchAddress(kLepton2SFBranch,   &vl2sf);
+        t->SetBranchAddress(kPhotonIsoSFBranch,  &vphIsosf);
     };
 
     // ============================================================
@@ -224,8 +264,20 @@ void fill_histograms(const char* channel  = "eegamma",
             std::vector<double> cells(vcellE->begin(), vcellE->end());
             if (!isHealthyCluster(cells)) continue;
 
+            // Zero-padding diagnostic
+            int nzero = 0;
+            for (int k = 0; k < kClusterSize; ++k)
+                if (k != kCentralCell && cells[k] == 0.0) ++nzero;
+            h_nzero_d->Fill(nzero);
+            ++nTotal_d;
+            if (nzero > 0) ++nZeroPad_d;
+
             double Etot = 0;
             for (int k = 0; k < kClusterSize; ++k) Etot += cells[k];
+
+            // pT and eta distributions
+            h_pt_d->Fill(phPt);
+            h_eta_d->Fill(std::fabs(clEta2));
 
             double rc = calcReta(cells);
             double pc = calcRphi(cells);
@@ -243,13 +295,18 @@ void fill_histograms(const char* channel  = "eegamma",
                 h_d_eta[kReta][eb]->Fill(rc);
                 h_d_eta[kRphi][eb]->Fill(pc);
                 h_d_eta[kWeta2][eb]->Fill(wc);
+                h_d_stor_eta[kReta][eb]->Fill(vreta);
+                h_d_stor_eta[kRphi][eb]->Fill(vrphi);
+                h_d_stor_eta[kWeta2][eb]->Fill(vweta2);
 
-                for (int k = 0; k < kClusterSize; ++k) {
-                    double fk = cells[k] / Etot;
-                    sf_d [eb][k] += fk;
-                    sf2_d[eb][k] += fk * fk;
+                if (!kExcludeZeroPadFromCorr || nzero == 0) {
+                    for (int k = 0; k < kClusterSize; ++k) {
+                        double fk = cells[k] / Etot;
+                        sf_d [eb][k] += fk;
+                        sf2_d[eb][k] += fk * fk;
+                    }
+                    cnt_d[eb] += 1.0;
                 }
-                cnt_d[eb] += 1.0;
             }
             ++nPass;
         }
@@ -260,6 +317,8 @@ void fill_histograms(const char* channel  = "eegamma",
     // ============================================================
     //  PASS 1 — MC
     // ============================================================
+    // Sum-of-weights from h_sumW histogram (bin 2) in the MC ntuple files
+    auto sumWmap = computeSumWeightsFromFiles(mcF);
     {
         TChain* tm = makeChain(mcF);
         setBrMC(tm);
@@ -282,9 +341,25 @@ void fill_histograms(const char* channel  = "eegamma",
             std::vector<double> cells(vcellE->begin(), vcellE->end());
             if (!isHealthyCluster(cells)) continue;
 
-            double w = mcWeight(vmcw, vmuw, vxsec);
+            // Zero-padding diagnostic
+            int nzero = 0;
+            for (int k = 0; k < kClusterSize; ++k)
+                if (k != kCentralCell && cells[k] == 0.0) ++nzero;
+            h_nzero_m->Fill(nzero, 1.0);
+            ++nTotal_m;
+            if (nzero > 0) ++nZeroPad_m;
+
+            double nf = mcNormFactor(vmcch, sumWmap);
+            double w = mcWeight(vmcw, vmuw, nf, vl1sf, vl2sf, vphIsosf);
+            double w_nosf = mcWeight(vmcw, vmuw, nf, 1.0, 1.0, 1.0);
             double Etot = 0;
             for (int k = 0; k < kClusterSize; ++k) Etot += cells[k];
+
+            // pT and eta distributions
+            h_pt_m->Fill(phPt, w);
+            h_eta_m->Fill(std::fabs(clEta2), w);
+            h_pt_m_nosf->Fill(phPt, w_nosf);
+            h_eta_m_nosf->Fill(std::fabs(clEta2), w_nosf);
 
             double rc = calcReta(cells);
             double pc = calcRphi(cells);
@@ -305,19 +380,33 @@ void fill_histograms(const char* channel  = "eegamma",
                 h_m_eta[kReta][eb]->Fill(rc, w);
                 h_m_eta[kRphi][eb]->Fill(pc, w);
                 h_m_eta[kWeta2][eb]->Fill(wc, w);
+                h_m_fudg_eta[kReta][eb]->Fill(vreta, w);
+                h_m_fudg_eta[kRphi][eb]->Fill(vrphi, w);
+                h_m_fudg_eta[kWeta2][eb]->Fill(vweta2, w);
 
-                for (int k = 0; k < kClusterSize; ++k) {
-                    double fk = cells[k] / Etot;
-                    swf_m [eb][k] += w * fk;
-                    swf2_m[eb][k] += w * fk * fk;
+                if (!kExcludeZeroPadFromCorr || nzero == 0) {
+                    for (int k = 0; k < kClusterSize; ++k) {
+                        double fk = cells[k] / Etot;
+                        swf_m [eb][k] += w * fk;
+                        swf2_m[eb][k] += w * fk * fk;
+                    }
+                    sw_m[eb] += w;
                 }
-                sw_m[eb] += w;
             }
             ++nPass;
         }
         std::cout << "  MC passing: " << nPass << "\n";
         delete tm;
     }
+
+    // --- Zero-padding summary ---
+    std::cout << "\n--- Zero-padding summary ---\n";
+    std::cout << Form("  Data: %lld / %lld events have >=1 zero cell (%.2f%%)\n",
+                      nZeroPad_d, nTotal_d,
+                      nTotal_d > 0 ? 100.0 * nZeroPad_d / nTotal_d : 0.0);
+    std::cout << Form("  MC:   %lld / %lld events have >=1 zero cell (%.2f%%)\n",
+                      nZeroPad_m, nTotal_m,
+                      nTotal_m > 0 ? 100.0 * nZeroPad_m / nTotal_m : 0.0);
 
     // ============================================================
     //  COMPUTE CORRECTIONS
@@ -397,7 +486,8 @@ void fill_histograms(const char* channel  = "eegamma",
             std::vector<double> cells(vcellE->begin(), vcellE->end());
             if (!isHealthyCluster(cells)) continue;
 
-            double w = mcWeight(vmcw, vmuw, vxsec);
+            double nf = mcNormFactor(vmcch, sumWmap);
+            double w = mcWeight(vmcw, vmuw, nf, vl1sf, vl2sf, vphIsosf);
             double Etot = 0;
             for (int k = 0; k < kClusterSize; ++k) Etot += cells[k];
 

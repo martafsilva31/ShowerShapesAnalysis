@@ -91,13 +91,13 @@ void extract_chi2(
     const char* vars[nVar]    = {"reta", "rphi", "weta2"};
     const char* varTeX[nVar]  = {"$R_{\\eta}$", "$R_{\\phi}$", "$w_{\\eta 2}$"};
 
-    const int nMeth = 4;  // MC, M1, M2, Fudge
+    const int nMeth = 3;  // MC, M1, M2
 
     // ============================================================
     // Result storage
     // ============================================================
     struct EtaResult {
-        double v[4];  // chi2/ndf for MC, M1, M2, Fudge
+        double v[3];  // chi2/ndf for MC, M1, M2
         bool valid;
     };
     struct ScenResult {
@@ -112,7 +112,7 @@ void extract_chi2(
             R[ic][is].nData = R[ic][is].nMC = 0;
             for (int ie = 0; ie < kNEtaBins; ++ie)
                 for (int iv = 0; iv < nVar; ++iv)
-                    R[ic][is].eta[ie][iv] = {{-1, -1, -1, -1}, false};
+                    R[ic][is].eta[ie][iv] = {{-1, -1, -1}, false};
         }
 
     // ============================================================
@@ -153,12 +153,6 @@ void extract_chi2(
                     TH1D* hm2 = (TH1D*)f->Get(
                         Form("h_%s_mc_M2%s", vars[iv], suf.Data()));
 
-                    // Set A: branch-stored (fudge benchmark)
-                    TH1D* hds = (TH1D*)f->Get(
-                        Form("h_%s_data_stored%s", vars[iv], suf.Data()));
-                    TH1D* hfg = (TH1D*)f->Get(
-                        Form("h_%s_mc_fudged%s",   vars[iv], suf.Data()));
-
                     if (!hd || hd->GetEntries() < 100) continue;
 
                     TH1D* nd  = normClone(hd,  "nd");
@@ -172,13 +166,6 @@ void extract_chi2(
                     r.v[2] = (nd && nm2) ? chi2ndf(nm2, nd) : -1;
                     r.valid = (r.v[0] >= 0);
 
-                    if (hds && hfg && hds->GetEntries() >= 100) {
-                        TH1D* nds = normClone(hds, "nds");
-                        TH1D* nfg = normClone(hfg, "nfg");
-                        r.v[3] = (nds && nfg) ? chi2ndf(nfg, nds) : -1;
-                        delete nds; delete nfg;
-                    }
-
                     delete nd; delete nmc; delete nm1; delete nm2;
                 }
             }
@@ -190,8 +177,8 @@ void extract_chi2(
     // ============================================================
     // Compute averages: avg[chan][scen][var][method]
     // ============================================================
-    double avg[3][3][3][4] = {};
-    int    cnt[3][3][3][4] = {};
+    double avg[3][3][3][3] = {};
+    int    cnt[3][3][3][3] = {};
 
     for (int ic = 0; ic < nChan; ++ic)
         for (int is = 0; is < nScen; ++is)
@@ -227,8 +214,7 @@ void extract_chi2(
                 std::cout << "  " << vars[iv]
                           << ":  MC=" << avg[ic][is][iv][0]
                           << "  M1=" << avg[ic][is][iv][1]
-                          << "  M2=" << avg[ic][is][iv][2]
-                          << "  Fudge=" << avg[ic][is][iv][3] << "\n";
+                          << "  M2=" << avg[ic][is][iv][2] << "\n";
         }
     }
 
@@ -277,23 +263,21 @@ void extract_chi2(
         out << "\\begin{table}[htbp]\n";
         out << "\\centering\n";
         out << "\\caption{Average $\\chisq$ across all non-empty $|\\eta|$ bins "
-               "for each correction method.  Lower is better.  "
-               "``Fudge'' refers to the ATLAS fudge-factor benchmark "
-               "(evaluated on stored branch values).}\n";
+               "for each correction method.  Lower is better.}\n";
         out << "\\label{tab:chi2-summary}\n";
         out << "\\resizebox{\\textwidth}{!}{%\n";
         out << "\\begin{tabular}{ll";
-        for (int iv = 0; iv < nVar; ++iv) out << "|rrrr";
+        for (int iv = 0; iv < nVar; ++iv) out << "|rrr";
         out << "}\n";
         out << "\\toprule\n";
         out << " & ";
         for (int iv = 0; iv < nVar; ++iv)
-            out << "& \\multicolumn{4}{" << (iv < nVar - 1 ? "c|" : "c")
+            out << "& \\multicolumn{3}{" << (iv < nVar - 1 ? "c|" : "c")
                 << "}{" << varTeX[iv] << "} ";
         out << "\\\\\n";
         out << "Channel & Scenario ";
         for (int iv = 0; iv < nVar; ++iv)
-            out << "& MC & M1 & M2 & Fudge ";
+            out << "& MC & M1 & M2 ";
         out << "\\\\\n";
         out << "\\midrule\n";
         for (int ic = 0; ic < nChan; ++ic) {

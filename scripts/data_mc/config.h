@@ -23,8 +23,11 @@
 #include <cmath>
 #include <string>
 #include <iostream>
+#include <map>
 
 #include <TChain.h>
+#include <TFile.h>
+#include <TH1F.h>
 #include <TString.h>
 #include <TObjArray.h>
 #include <TObjString.h>
@@ -157,6 +160,7 @@ namespace config {
         if (sc == "converted")   return "Converted #gamma, no ID, loose iso";
         if (sc == "all_conv")    return "All #gamma, no ID, loose iso";
         if (sc == "tight_id")    return "Unconverted #gamma, tight ID, loose iso";
+        if (sc == "iso_tight")   return "Unconverted #gamma, no ID, tight iso";
         if (sc == "no_iso")      return "Unconverted #gamma, no ID, no iso";
         return scenario;
     }
@@ -203,6 +207,8 @@ namespace config {
     const char* const kBSWeightBranch  = "event.beamspotwgt";
     const char* const kLepton1SFBranch = "lepton1.SF";
     const char* const kLepton2SFBranch = "lepton2.SF";
+    const char* const kPhotonIDSFBranch  = "photon.ID_sf";
+    const char* const kPhotonIsoSFBranch = "photon.sf";   // isolation SF from NTupleMaker acc_sf("sf")
 
     // MC truth
     const char* const kTruthMatchBranch = "photon.istruthmatch";
@@ -406,13 +412,99 @@ namespace config {
     }
 
     // ======================================================================
-    // MC event weight — matching Francisco's approach
-    // Formula: gen × PU × xsec  (trigger SF not available in our ntuples;
-    //          lumi is constant → cancels in normalised shape comparisons)
-    // Dropped vs. earlier version: beamspot weight, lepton SFs
+    // MC event weight — absolute normalisation
+    //
+    // Per-event weight = mcwgt * muwgt * (σ * L / sumW) * SFs
+    //
+    // Cross-sections from PMG: PMGxsecDB_mc23.txt
+    //   700770  Sh_2214_eegamma     σ = 102.60 pb   genFilterEff = 1.0
+    //   700771  Sh_2214_mumugamma   σ = 102.59 pb   genFilterEff = 1.0
+    //
+    // Luminosity: data24 = 108 fb⁻¹ = 108000 pb⁻¹
     // ======================================================================
-    inline double mcWeight(double mcwgt, double muwgt, double xsec) {
-        return mcwgt * muwgt * xsec;
+    const double kLumi_pb = 108.0e3;   // 108 fb⁻¹ in pb⁻¹
+
+    // Cross-section per DSID [pb]
+    inline double xsecForDSID(int dsid) {
+        switch (dsid) {
+            case 700770: return 102.60;   // Sh_2214_eegamma
+            case 700771: return 102.59;   // Sh_2214_mumugamma
+            default:
+                std::cerr << "WARNING: unknown DSID " << dsid
+                          << ", using xsec=1 pb\n";
+                return 1.0;
+        }
+    }
+
+    // Sum-of-weights from h_sumW histograms in the NTupleMaker output files.
+    //
+    // h_sumW is a TH1F with 3 bins filled at DAOD level:
+    //   bin 1 = InitialEvents
+    //   bin 2 = SumOfWeights   ← used here
+    //   bin 3 = SumOfWeights2
+    //
+    // Files are matched to DSIDs by filename substring:
+    //   "eegamma"   → DSID 700770
+    //   "mumugamma" → DSID 700771
+    //
+    // For a comma-separated list of files (llgamma channel), each file is
+    // opened individually and its bin 2 value is added to the running total
+    // for the corresponding DSID.
+    inline std::map<int, double> computeSumWeightsFromFiles(const char* mcFiles) {
+        std::map<int, double> result;
+        TString flist(mcFiles);
+        TObjArray* arr = flist.Tokenize(",");
+        for (int i = 0; i < arr->GetEntries(); i++) {
+            TString fname = ((TObjString*)arr->At(i))->GetString();
+            fname = fname.Strip(TString::kBoth);
+            TFile* f = TFile::Open(fname);
+            if (!f || f->IsZombie()) {
+                std::cerr << "WARNING: cannot open " << fname
+                          << " for sumW reading\n";
+                if (f) delete f;
+                continue;
+            }
+            TH1F* h = (TH1F*)f->Get("h_sumW");
+            if (!h) {
+                std::cerr << "WARNING: h_sumW not found in " << fname << "\n";
+                f->Close(); delete f; continue;
+            }
+            double sw = h->GetBinContent(2);
+            int dsid = 0;
+            if (fname.Contains("eegamma"))    dsid = 700770;
+            else if (fname.Contains("mumugamma")) dsid = 700771;
+            if (dsid > 0) {
+                result[dsid] += sw;
+                std::cout << "  h_sumW bin2(" << fname << ") DSID "
+                          << dsid << " += " << sw << "\n";
+            } else {
+                std::cerr << "WARNING: cannot determine DSID from filename: "
+                          << fname << "\n";
+            }
+            f->Close(); delete f;
+        }
+        delete arr;
+        for (auto& kv : result)
+            std::cout << "  sumW[" << kv.first << "] = " << kv.second
+                      << "  (h_sumW, DAOD)" << std::endl;
+        return result;
+    }
+
+    // Per-event normalisation factor: σ * L / sumW_DSID
+    // Must be multiplied by mcwgt * muwgt * SFs
+    inline double mcNormFactor(int dsid,
+                               const std::map<int, double>& sumWmap) {
+        auto it = sumWmap.find(dsid);
+        if (it == sumWmap.end()) {
+            std::cerr << "WARNING: no sumW for DSID " << dsid << "\n";
+            return 0.0;
+        }
+        return xsecForDSID(dsid) * kLumi_pb / it->second;
+    }
+
+    inline double mcWeight(double mcwgt, double muwgt, double normFactor,
+                           double l1sf, double l2sf, double phIsosf) {
+        return mcwgt * muwgt * normFactor * l1sf * l2sf * phIsosf;
     }
 
 }  // namespace config
