@@ -6,7 +6,7 @@ Analysis scripts and grid submission for the ATLAS photon shower shape reweighti
 
 ```
 ShowerShapesAnalysis/
-├── .github/            # Copilot instructions (global + scoped)
+├── .github/            # Development conventions
 ├── scripts/            # Analysis scripts
 │   ├── utils.py               # Shared I/O and cell-energy utilities
 │   ├── compute_reta.py        # Compute R_eta from 7×11 cells
@@ -52,11 +52,7 @@ ShowerShapesAnalysis/
 ├── report/             # Reports and documentation
 │   ├── egam3_problem_report.md       # DAOD_EGAM3 problem analysis
 │   ├── weta2_investigation_summary.md # w_eta_2 study summary
-│   ├── data_mc_comparison_report.tex  # Data-MC comparison report
 │   ├── closure_test_report.tex        # MC closure test report
-│   ├── software_documentation.tex     # General software documentation
-│   ├── data_mc_reweighting_report.tex # Old report: TProfile M2 investigation
-│   ├── data_mc_software_doc.tex       # Software doc: cell reweighting pipeline
 │   ├── cell_reweighting_report.tex    # Physics report: M1/M2 pipeline (current)
 │   ├── chi2_yields.tex               # Auto-generated event yield table
 │   ├── chi2_summary.tex              # Auto-generated chi-squared summary
@@ -197,43 +193,4 @@ bash ShowerShapesAnalysis/grid/submit_mc23e_Zllg.sh   # MC23e Z→llγ
 2. Create `grid/submit_<dataset>.sh` following the existing template.
 3. Add sample dataset names to `grid/samples/`.
 
-### Copilot / AI-Assisted Development
 
-This repo includes `.github/copilot-instructions.md` and scoped instruction files in
-`.github/instructions/` that give Copilot context about:
-- The physics (shower shapes, EFT, cell-level ntuples)
-- The software stack (Athena, ROOT, pathena)
-- Conventions for scripts and grid jobs
-
-These files are automatically picked up by GitHub Copilot in VS Code.
-
-## Task List
-
-- [x] Repository structure and cleanup
-- [x] Merge split ntuples (data22, mc23e)
-- [x] Diagnose data22 GRL issue
-- [x] Prepare data24 grid submission
-- [x] GitHub remote setup
-- [x] Copilot instructions
-- [x] Add fudged variable on top of R_eta / R_phi plots
-- [x] w_eta_2 comparison plot (compute + fudged/unfudged overlay)
-- [x] MC closure test pipeline (cell-energy reweighting)
-- [x] Data-MC comparison pipeline
-- [x] Cell-energy reweighting pipeline (M1/M2/M3 methods)
-- [x] Isolation cut study (4 variants: no_iso, iso_tight, iso_track, iso_full)
-- [x] Sigma ratio capping for M3 method
-- [x] M2 TProfile binning fix (physical range [0, 0.5])
-- [x] Stored-vs-computed shower shape validation plots
-- [x] Per-method cell energy residual plots
-- [x] Physics report (data_mc_reweighting_report.tex — TProfile investigation)
-- [x] Software documentation (data_mc_software_doc.tex)
-- [x] Add L2 cell eta/phi branches to NTupleMaker
-- [x] Grid production v3 (task 49065711, 35M events, AODs with L2 eta/phi branches)
-- [x] MC weight fix (3-arg: mcwgt × muwgt × xsec)
-- [x] Batch mode: 3 channels × 3 conversion scenarios = 9 runs
-- [x] Chi-squared extraction macro (extract_chi2.C)
-- [x] Physics report (cell_reweighting_report.tex — M1/M2 pipeline)
-- [ ] Binning strategy studies (pT×η, coarse η, hit-position λ, quadrant)
-- [ ] ML approaches (normalising flows, quantile regression)
-- [ ] Download v3 grid output and run analysis
-- [ ] Resolve w_eta_2 computation discrepancy (see report/weta2_investigation_summary.md)

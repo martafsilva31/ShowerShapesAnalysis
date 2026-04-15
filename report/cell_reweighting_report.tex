@@ -180,16 +180,24 @@ Dilepton mass      & $40 < m_{\ell\ell} < 83$~GeV \\
 Three-body mass    & $80 < m_{\ell\ell\gamma} < 100$~GeV \\
 $\Delta R(\ell, \gamma)$ & $> 0.4$ (both leptons) \\
 Cluster size       & exactly 77 cells \\
-Central cell       & must carry the highest energy \\
+Central cell       & must carry the highest energy (safety check$^{*}$) \\
 Total cluster energy & $> 0$ \\
-MC truth matching  & required for MC events \\
 \bottomrule
 \end{tabular}
+\smallskip
+
+\noindent$^{*}$The NTupleMaker constructs the $7\times11$ cluster
+centred on the hottest Layer\,2 cell, so this requirement is satisfied
+by construction; it is imposed as a redundant safety check.
+MC truth matching is available in the ntuple (\texttt{requireTruthMC}
+flag in \texttt{config.h}) but is \textbf{not applied} in the current
+configuration, consistent with Francisco's reference implementation.
 \end{table}
 
 The dilepton and three-body mass windows select the final-state-radiation
 (FSR) topology $Z \to \ell\ell\gamma$.  The central-cell requirement
-ensures a well-measured shower core.
+is a safety net, since the NTupleMaker already centres the cluster on
+the hottest cell.
 
 \subsection{Conversion scenarios}
 \label{sec:conversion-scenarios}
@@ -342,32 +350,6 @@ Run\,3 data.
 
 
 %% ====================================================================
-\section{ATLAS Fudge Factors as Benchmark}
-\label{sec:fudge}
-%% ====================================================================
-
-The standard ATLAS approach applies ``fudge factors'' that correct the
-shower shape branch values directly.  These corrections are derived from
-the TUNE27AD calibration and are applied at the ntuple level: each MC
-event carries both fudged (\texttt{photon.reta}) and unfudged
-(\texttt{photon.reta\_unfudged}) branch values.
-
-Throughout this note the fudge factor performance serves as the
-\emph{benchmark} against which the cell reweighting methods are
-compared.  Figure~\ref{fig:fudge-benchmark} shows the fudge factor
-comparison for the combined channel, unconverted photons.
-
-\begin{figure}[htbp]
-\centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/fudge_factors.pdf}
-\caption{Fudge factor benchmark: data (stored branch values) versus MC
-  fudged and unfudged, for the combined $Z \to \ell\ell\gamma$ channel,
-  unconverted photons.  One page per $\abseta$ bin.}
-\label{fig:fudge-benchmark}
-\end{figure}
-
-
-%% ====================================================================
 \section{Results: Baseline (Unconverted Photons)}
 \label{sec:results-baseline}
 %% ====================================================================
@@ -474,9 +456,20 @@ Table~\ref{tab:chi2-llgamma-all_conv} (Appendix~\ref{app:chi2-tables}).
 \label{sec:conv-comparison}
 
 The summary table (Table~\ref{tab:chi2-summary}) allows direct
-comparison of the average $\chisq$ across conversion scenarios.  In
-general the corrections perform well for all scenarios, with M2
-providing the most significant improvement for \weta.
+comparison of the average $\chisq$ across conversion scenarios.
+
+Unconverted photons consistently produce the lowest $\chisq$ values for
+all methods.  For the combined channel:\ M1 achieves an average \weta\
+$\chisq$ of 0.0007 (unconverted) versus 0.0012 (converted).  Converted
+photons produce more diffuse electromagnetic showers due to the upstream
+$e^+e^-$ pair production, leading to broader cell-fraction distributions
+whose correction is intrinsically harder.  The reduced data statistics
+for converted photons (45\,532 events versus 205\,309 unconverted in the
+combined channel) further limit the precision of the derived corrections.
+
+The inclusive (all-conversions) scenario contains both populations and
+benefits from the highest statistics; it generally falls between the
+unconverted and converted performance.
 
 
 %% ====================================================================
@@ -491,7 +484,15 @@ channels are available in Appendix~\ref{app:chi2-tables}
 
 Both channels show consistent behaviour: the correction performance is
 stable across the two lepton flavours, validating the use of the
-combined channel as the primary result.
+combined channel as the primary result.  The $Z \to \mu\mu\gamma$
+channel yields $\sim$60\% more data events (127\,178 versus 78\,131
+unconverted) and correspondingly lower $\chisq$ values in all
+scenarios, confirming that increased statistics improve correction
+quality.  No channel-specific pathologies are observed; the M2
+instabilities discussed in Section~\ref{sec:disc-m2-instability} appear
+in different $\abseta$ bins in the individual channels but are present
+in both, confirming that they are a property of the method rather than
+channel-specific artefacts.
 
 
 %% ====================================================================
@@ -562,51 +563,237 @@ $\abseta$ bin in Figures~\ref{fig:cell-shift}~and~\ref{fig:cell-stretch}.
 \label{sec:discussion}
 %% ====================================================================
 
-\subsection{M1 strengths and limitations}
+The nine-scenario evaluation reveals a clear hierarchy among the
+correction approaches.  This section presents a quantitative analysis,
+diagnoses the M2 instabilities, and compares the cell-level methods
+with the standard ATLAS fudge-factor corrections.
+
+\subsection{M1 performance across all scenarios}
 \label{sec:disc-m1}
 
-Method~1 is attractive for its simplicity and guaranteed energy
-conservation.  It corrects the mean cell profile perfectly by
-construction.  For \Reta\ and \Rphi, which are ratios of energy sums
-over groups of cells, matching the mean fractions is often sufficient
-to achieve data--MC agreement.
-
-However, \weta\ is a second-moment quantity (energy-weighted variance),
-and M1's correction of only the first moment leaves residual
-discrepancies.  In $\abseta$ bins where the data and MC variance differ
-substantially, M1 underperforms.
-
-\subsection{M2 improvements}
-\label{sec:disc-m2}
-
-Method~2 improves on M1 by additionally matching the variance of each
-cell's energy fraction.  The linear shift+stretch transformation
-captures the first two moments of the $f_k$ distribution, which
-translates into better agreement for second-moment quantities like
-\weta.
-
-The energy rescaling step~\eqref{eq:m2-rescale} introduces a small
-deviation from exact energy conservation.  In practice the rescaling
-factor is close to unity, confirming that M2 approximately conserves
-energy.
-
-\subsection{Problematic \texorpdfstring{$\abseta$}{|eta|} bins}
-\label{sec:disc-problematic}
-
-Certain $\abseta$ bins may show elevated $\chisq$ for both methods:
+Method~1 delivers consistent and substantial improvements across all
+nine channel$\times$scenario combinations.  For the primary benchmark
+($Z \to \ell\ell\gamma$, unconverted):
 \begin{itemize}
-  \item Bin~8 ($1.37 \leq \abseta < 1.52$): the calorimeter crack
-        region, excluded from the analysis.
-  \item High-$\abseta$ bins ($\abseta > 2.0$): limited statistics and
-        different cluster geometry may reduce correction quality.
-  \item Transition bins near the crack: material effects can affect
-        shower profiles.
+  \item \Reta: average $\chisq$ reduced from $0.0015$ (uncorrected MC)
+        to $0.0006$ (M1), a factor~2.5 improvement.
+  \item \weta: reduced from $0.0076$ to $0.0007$, a factor~10.9
+        improvement --- the largest gain of any method for any variable.
+  \item \Rphi: increases slightly from $0.0007$ to $0.0011$.
+\end{itemize}
+The pattern is reproduced across all channels and conversion scenarios
+(Table~\ref{tab:chi2-summary}).  M1's strength for \Reta\ and \weta\
+is expected: both variables are dominated by the central cells of the
+$7 \times 11$ cluster, where the mean cell fraction is large and the
+shift correction has the most leverage.
+
+The \Rphi\ anomaly merits discussion.  $R_\phi = E(3\!\times\!3) /
+E(3\!\times\!7)$ is a ratio of two overlapping energy sums sharing the
+same $3\!\times\!3$ core.  The M1 shift corrects each cell
+independently; while the individual cells improve in mean, the
+\emph{ratio} of two correlated sums need not improve --- the correction
+introduces coherent shifts in both numerator and denominator that can
+increase the spread of the ratio distribution.  This is a fundamental
+limitation of cell-level mean corrections for ratio observables whose
+numerator and denominator share cells.  In practice the degradation is
+modest ($0.0007 \to 0.0011$) and M1's \Rphi\ $\chisq$ remains well
+below the uncorrected \weta\ value, so the overall correction quality
+is still acceptable.
+
+M1 preserves total cluster energy exactly by construction
+($\sum_k \Delta_k = 0$), requiring no rescaling.  This property makes
+M1 robust against pathological cell configurations and suitable for
+production use without additional safeguards.
+
+\subsection{M2 instability diagnosis}
+\label{sec:disc-m2-instability}
+
+Contrary to the expectation that matching both the mean and variance
+of the cell fraction should uniformly improve agreement, M2 exhibits
+\textbf{catastrophic failures} in specific $\abseta$ bins.
+Table~\ref{tab:m2-failures} lists the most severe cases.
+
+\begin{table}[htbp]
+\centering
+\caption{M2 catastrophic failures: $\abseta$ bins where M2 produces
+  $\chisq$ values more than $10\times$ worse than uncorrected MC.
+  Only the worst instances per scenario are shown; additional bins
+  with $5$--$10\times$ degradation exist in most scenarios.}
+\label{tab:m2-failures}
+\begin{tabular}{llllrrl}
+\toprule
+Channel & Scenario & $\abseta$ bin & Variable
+  & $\chisq^{\text{MC}}$ & $\chisq^{\text{M2}}$
+  & Ratio \\
+\midrule
+$ee\gamma$ & Unconv.
+  & {[}0.60, 0.80) & $R_\phi$ & 0.0004 & 0.0323 & $81\times$ \\
+  & & {[}0.60, 0.80) & $w_{\eta 2}$ & 0.0017 & 0.0481 & $28\times$ \\
+  & & {[}1.20, 1.30) & $R_\phi$ & 0.0011 & 0.0641 & $58\times$ \\
+  & & {[}1.20, 1.30) & $w_{\eta 2}$ & 0.0016 & 0.0273 & $17\times$ \\
+\midrule
+$\mu\mu\gamma$ & Converted
+  & {[}0.20, 0.40) & $R_\phi$ & 0.0012 & 0.0426 & $36\times$ \\
+  & & {[}0.20, 0.40) & $w_{\eta 2}$ & 0.0033 & 0.0463 & $14\times$ \\
+  & & {[}1.00, 1.20) & $R_\phi$ & 0.0004 & 0.0360 & $90\times$ \\
+  & & {[}1.00, 1.20) & $w_{\eta 2}$ & 0.0011 & 0.0588 & $53\times$ \\
+\midrule
+$\ell\ell\gamma$ & Converted
+  & {[}0.20, 0.40) & $R_\phi$ & 0.0007 & 0.0262 & $37\times$ \\
+  & & {[}0.20, 0.40) & $w_{\eta 2}$ & 0.0025 & 0.0509 & $20\times$ \\
+  & & {[}1.00, 1.20) & $R_\phi$ & 0.0003 & 0.0238 & $79\times$ \\
+  & & {[}1.00, 1.20) & $w_{\eta 2}$ & 0.0008 & 0.0159 & $20\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Root cause: systematically large stretch factors in peripheral cells.}
+The M2 stretch factor is
+$\text{stretch}_k = \sigma_{\text{data},k} / \sigma_{\text{MC},k}$.
+Inspection of the computed stretch vectors reveals a striking
+asymmetry: stretch values are almost exclusively $\geq 1$, and often
+\textbf{massively} so.  The minimum stretch across all 77~cells and
+14~$\abseta$ bins is $\sim$0.93 --- barely below unity --- while the
+maximum reaches $\sim$16 (\texttt{eegamma} baseline, $\abseta$ bin~3,
+cell~44) and $\sim$10 (\texttt{llgamma} baseline, same bin/cell).
+
+This means $\sigma_{\text{data},k} > \sigma_{\text{MC},k}$
+\textbf{essentially everywhere}: data cell-energy distributions are
+systematically wider than MC.  The likely cause is that MC showers are
+``too clean'' --- they lack the full spectrum of detector noise,
+pile-up fluctuations, and material-interaction tails that broaden the
+real data distributions.
+
+The magnitude of the discrepancy depends on the energy fraction
+$\langle f_k \rangle$ carried by the cell.  For the central cells
+($\langle f_k \rangle \sim 0.02$--$0.10$), both $\sigma_{\text{data}}$
+and $\sigma_{\text{MC}}$ are sizable and their ratio stays in the range
+0.95--1.3 --- benign corrections.  For peripheral cells
+($\langle f_k \rangle < 10^{-3}$), both standard deviations are tiny
+($\sim$$10^{-4}$), and even a small absolute difference
+$\sigma_{\text{data}} - \sigma_{\text{MC}}$ translates into a ratio
+$\gg 1$.  In the catastrophic $\abseta$ bins:
+\begin{itemize}
+  \item $\abseta \in [0.60, 0.80)$ (bin~3, unconverted): 18 of 77 cells
+    have $\text{stretch} > 2$, with a maximum of 10.2;
+  \item $\abseta \in [1.20, 1.30)$ (bin~6, unconverted): 30 of 77 cells
+    have $\text{stretch} > 2$, with a maximum of 9.8;
+  \item for the \texttt{eegamma} channel (lower statistics), the maxima
+    rise to 16.3 and 15.3 in the same bins.
 \end{itemize}
 
-Where the stretch ratio $\sigma_{\text{data},k} / \sigma_{\text{MC},k}$
-is very large or very small, the M2 correction can overstretch or
-compress the cell fraction distribution.  Regularisation (capping the
-stretch ratio) has not been applied in this analysis.
+These large stretch factors \textbf{amplify} the cell-energy
+fluctuations far beyond their physical range.  After the
+energy-conservation rescaling~\eqref{eq:m2-rescale}, the amplified
+peripheral cells steal energy from the central core, distorting the
+shower shape variables and producing the observed catastrophic $\chisq$
+values.
+
+Crucially, the reverse problem ($\text{stretch} \ll 1$) is
+\textbf{not observed}: MC never significantly over-estimates the
+cell-energy variance.  The instability is therefore one-sided: it is
+always an amplification, never a compression.
+
+This is \textbf{not a bug} but an \textbf{intrinsic limitation} of the
+variance-matching approach when applied to high-dimensional clusters
+where most cells carry negligible energy and the MC systematically
+underestimates the cell-level variance.  The problem is exacerbated
+for converted photons, which have more diffuse showers and hence more
+cells with intermediate energy fractions in the regime where the
+variance ratio is most unstable.
+
+Notably, the failing $\abseta$ bins differ between unconverted
+({[}0.60, 0.80) and {[}1.20, 1.30)) and converted ({[}0.20, 0.40) and
+{[}1.00, 1.20)) photons.  This bin-dependent pattern further supports
+the diagnosis: the instability depends on the specific shower topology
+in each ($\abseta$, conversion type) combination, rather than on a fixed
+detector geometry effect.
+
+\paragraph{M2 averaged performance.}
+Table~\ref{tab:chi2-summary} shows that M2 \textbf{never outperforms
+M1 on average} across any of the 27 (channel $\times$ scenario $\times$
+variable) combinations.  The catastrophic bins dominate the average,
+overwhelming the improvements that M2 provides in other bins.  For
+example, in the combined channel (unconverted), M2 achieves excellent
+$\chisq$ in the high-$\abseta$ region ($\abseta > 1.8$), often matching
+or surpassing M1 --- but this is erased by a single bin where $\chisq$
+is $50\times$ worse.
+
+\subsection{Comparison with fudge factors}
+\label{sec:disc-fudge}
+
+The ATLAS fudge-factor framework applies an empirical, per-variable
+correction to the branch-level shower shape values.  The ``Fudged''
+column in the $\chisq$ tables represents the agreement between data
+and MC after these corrections.
+
+Fudge factors achieve the lowest average $\chisq$ in the majority of
+the 27 (channel $\times$ scenario $\times$ variable) combinations,
+typically outperforming M1 by 20--40\%.  For instance, in
+$Z \to \ell\ell\gamma$ (unconverted):\ \Reta\ $0.0005$ (Fudged) vs.\
+$0.0006$ (M1); \weta\ $0.0005$ vs.\ $0.0007$.
+
+This marginal advantage is expected: fudge factors are tuned
+\emph{independently per variable} using the full data--MC comparison for
+that specific observable, whereas cell-level methods derive a
+\emph{single} set of 77--cell corrections from which all shower shapes
+are recomputed.  The cell-level approach has fewer effective degrees of
+freedom (77~shifts per $\abseta$ bin) to simultaneously correct three
+observables built from overlapping cell windows.
+
+The key advantage of cell-level corrections is \textbf{physics
+generality}: any observable built from the Layer\,2 cell energies ---
+including variables not currently used in photon ID such as
+$E_{\text{ratio}}$, $f_{\text{side}}$, or new discrimination variables
+--- benefits automatically from the same corrections without separate
+tuning.  Fudge factors would need to be re-derived for each new variable.
+
+A second advantage is \textbf{correlation preservation}: because the
+cell energies are corrected before the shower shapes are computed, the
+correlations between \Reta, \Rphi, and \weta\ are preserved by
+construction.  Fudge factors, applied independently per variable, can
+distort these correlations.
+
+In summary, M1 is the recommended cell-level method.  It provides
+\emph{most} of the fudge-factor improvement (within $\sim$30\%) while
+offering a more physically motivated and extensible correction
+framework.  Fudge factors remain the gold standard for per-variable
+agreement when only the three standard shower shapes are of interest.
+
+\subsection{Problematic \texorpdfstring{$\abseta$}{|eta|} regions}
+\label{sec:disc-problematic}
+
+Several $\abseta$ regions exhibit elevated $\chisq$ for all methods:
+
+\paragraph{High $\abseta$ ($> 2.0$).}
+The uncorrected MC shows the largest mismodelling for \weta\ in the
+forward region: $\chisq = 0.027$ at $\abseta \in [2.0, 2.2)$ and
+$\chisq = 0.030$ at $\abseta \in [2.2, 2.4)$ for the combined
+unconverted channel.  M1 reduces these by factors of 50--60 to
+$\chisq \approx 0.0005$, demonstrating that the cell-fraction mean
+shift captures the dominant mismodelling even where the detector
+geometry differs significantly from the barrel.
+
+\paragraph{Near-crack region ($\abseta \in [1.30, 1.52)$).}
+The bins immediately adjacent to the calorimeter crack show elevated
+$\chisq$ for all methods.  The $[1.30, 1.37)$ bin, in particular,
+has limited data statistics (704 events for $ee\gamma$ unconverted)
+and residual material effects from the crack region that affect the
+shower profile.  All methods produce $\chisq \sim 0.01$--$0.03$ here,
+which is 5--10$\times$ worse than the barrel average.  The
+$[1.52, 1.60)$ bin, immediately after the crack, shows a similar
+pattern.  These bins are unlikely to improve without dedicated
+treatment (e.g.\ separate correction parameters for the transition
+region).
+
+\paragraph{Converted photons.}
+All methods degrade for converted photons relative to unconverted, with
+the degradation factor roughly proportional to $\sqrt{N_{\text{unconv}} /
+N_{\text{conv}}}$, suggesting that statistical precision of the
+corrections is a limiting factor.  For the combined channel, the
+converted dataset has 45\,532 events versus 205\,309 unconverted (a
+factor~4.5 fewer), corresponding to a $\sim$$2\times$ increase in
+statistical uncertainty on the correction parameters.
 
 
 %% ====================================================================
@@ -614,45 +801,90 @@ stretch ratio) has not been applied in this analysis.
 \label{sec:future}
 %% ====================================================================
 
-\subsection{Binning strategy studies}
-\label{sec:future-binning}
+\subsection{M2 regularisation}
+\label{sec:future-regularisation}
 
-The current corrections are derived in 14~$\abseta$ bins with no
-dependence on photon \pt\ or other kinematic variables.  Francisco
-Almeida's \texttt{photoncellbasedrw} framework supports five binning
-strategies \cite{francisco}:
+The M2 instabilities identified in Section~\ref{sec:disc-m2-instability}
+can be mitigated by regularising the stretch factor.  The key empirical
+observation is that the problem is \textbf{one-sided}: stretch values
+are almost exclusively $\geq 1$ (data distributions are systematically
+wider than MC), with extremes reaching $\sim$10--16 in the worst bins,
+while the minimum observed stretch is $\sim$0.93.  Regularisation
+therefore needs primarily to cap the upper tail.  Several strategies
+are possible:
 
 \begin{enumerate}
-  \item \textbf{\pt\ $\times$ $\abseta$}: 6~\pt\ bins $\times$
-        14~$\abseta$ bins $= 84$ sets of 77-cell corrections.
-        This captures \pt-dependent shower evolution.
-  \item \textbf{Coarse $\abseta$}: 5~broad $\abseta$ bins instead of 14,
-        trading granularity for better per-bin statistics in
-        data-limited regions.
-  \item \textbf{Hit-position $\lambda$}: the impact position of the
-        shower within each cell, divided into 5~$\lambda$ regions.
-        This captures sub-cell shower position effects.
-  \item \textbf{Quadrant}: 4~sectors defined by
-        $\text{sign}(\Delta\eta) \times \text{sign}(\Delta\phi)$
-        relative to the cluster centre, capturing asymmetric shower
-        profiles.
-  \item \textbf{Combined $\lambda$ + quadrant}: the most granular
-        option, combining hit position and angular sectors.
+  \item \textbf{Winsorisation (upper cap)}: restrict the stretch factor to
+        $\text{stretch}_k \leq s_{\max}$, e.g.\ $s_{\max} = 1.5$ or
+        $2.0$.  Since the instability is exclusively upward, a lower
+        bound is not needed in practice ($s_{\min} = 1.0$ suffices).
+        This is the simplest approach and guarantees bounded corrections,
+        at the cost of incomplete variance matching in capped cells.
+  \item \textbf{Peripheral-cell exclusion}: apply M2 only to cells with
+        $\langle f_k \rangle > f_{\min}$ (e.g.\ $f_{\min} = 0.002$)
+        and fall back to M1 for the remaining cells.  This preserves
+        M2's variance matching where it is stable while avoiding the
+        problematic near-zero regime.
+  \item \textbf{Regularised variance}: replace $\sigma_{\text{MC},k}$
+        with
+        $\sigma_{k,\text{reg}} = \sqrt{\sigma_{\text{MC},k}^2
+        + \varepsilon^2}$ for a small regularisation constant
+        $\varepsilon$, preventing the ratio from diverging when the
+        MC variance is small.  The optimal $\varepsilon$ can be
+        chosen by minimising the $\chisq$ on a held-out validation
+        sample.
 \end{enumerate}
 
-These studies would be performed on the combined
-$Z \to \ell\ell\gamma$ channel with all three conversion scenarios,
-giving $4 \text{ binning modes} \times 3 \text{ scenarios} = 12$
-additional pipeline runs.
+The peripheral-cell exclusion approach is the most physically motivated:
+cells with $f_k < 10^{-3}$ contribute negligibly to all standard shower
+shapes, and their variance carries no useful physics information.  A
+systematic study of $f_{\min}$ thresholds, evaluating $\chisq$ across
+all $\abseta$ bins, is the recommended first step.
+
+\subsection{\texorpdfstring{$\pt$}{pT}-dependent corrections}
+\label{sec:future-pt}
+
+The current corrections are derived in 14~$\abseta$ bins with no
+dependence on photon \pt.  Francisco Almeida's \texttt{photoncellbasedrw}
+framework uses $6~\pt \times 5~\text{hit-position} = 30$ bins per
+conversion type, with \textbf{no} $\abseta$ binning \cite{francisco}.
+These two binning strategies are completely orthogonal, addressing
+different physics:
+
+\begin{itemize}
+  \item $\abseta$ binning captures detector geometry effects (material
+        budget, cell granularity, crack proximity).
+  \item \pt\ binning captures energy-scale-dependent shower evolution
+        (depth of shower maximum, lateral spread).
+  \item Hit-position binning captures sub-cell impact-point effects on
+        the cell response.
+\end{itemize}
+
+The natural extension is a combined $\pt \times \abseta$ grid.
+With $6~\pt \times 14~\abseta = 84$ sets of corrections, the statistical
+dilution per bin must be monitored: the current dataset provides
+$\sim$$16\,\text{k}$ data events per $\abseta$ bin (unconverted,
+combined channel); splitting further into 6~\pt\ bins yields
+$\sim$$2.7\,\text{k}$ per cell, which may be marginal for stable
+variance estimation (relevant to M2, less so for M1).
+
+A staged approach is recommended:
+\begin{enumerate}
+  \item First evaluate M1 with $\pt \times \abseta$ to quantify the gain
+        from \pt-differential corrections.
+  \item If the gain is significant, add hit-position binning and assess
+        whether the statistical precision remains adequate.
+\end{enumerate}
 
 \subsection{Machine-learning approaches}
 \label{sec:future-ml}
 
 The M1 and M2 methods apply independent linear corrections to each of
-the 77~cells.  This has two fundamental limitations: (a)~inter-cell
-correlations are not preserved, and (b)~higher-order (non-Gaussian)
-features of the cell energy distribution are not captured.
-Machine-learning methods can address both limitations.
+the 77~cells.  This has two fundamental limitations:
+(a)~inter-cell correlations are not preserved beyond the mean (M1) or
+first two moments (M2), and (b)~higher-order (non-Gaussian) features of
+the cell energy distribution are not captured.  Machine-learning methods
+can address both.
 
 \subsubsection{Normalising flows}
 
@@ -665,14 +897,18 @@ vector of cell energy fractions.
 \begin{itemize}
   \item \textbf{Full multivariate correction}: the transformation
         operates on the joint distribution of all 77~cells
-        simultaneously, automatically preserving inter-cell correlations.
+        simultaneously, automatically preserving inter-cell correlations
+        to all orders.
   \item \textbf{Conditional flows}: the transformation can be
         conditioned on $(\pt, \eta)$, providing differential corrections
         without explicit binning and the associated statistical
         fragmentation.
+  \item \textbf{No variance-ratio instability}: normalising flows do not
+        compute explicit $\sigma$ ratios; the transformation is learned
+        end-to-end, naturally avoiding the M2 failure mode.
   \item \textbf{Non-Gaussian tails}: normalising flows can model
-        arbitrary distributions, including the heavy tails observed in
-        some cell fractions.
+        arbitrary distributions, including the heavy tails and
+        near-zero peaks observed in peripheral cell fractions.
 \end{itemize}
 
 The training data would consist of cell fraction vectors from data and MC
@@ -692,38 +928,36 @@ implemented empirically (histogram-based CDF) or learned via
 neural-network quantile regression \cite{koenker}.
 
 Quantile mapping is non-linear and can correct arbitrary distributional
-differences, improving on the linear M1/M2 transformations.  It can also
-be extended to conditional quantile mapping, where $F$ depends on
-$(\pt, \eta)$.
+differences on a per-cell basis, improving on the linear M1/M2
+transformations.  It can also be extended to conditional quantile
+mapping, where $F$ depends on $(\pt, \eta)$.  However, like M1/M2, it
+operates per cell and does not intrinsically preserve inter-cell
+correlations.
 
-\subsubsection{Advantages and practical considerations}
+\subsubsection{Practical considerations}
 
-Machine-learning approaches offer several advantages over M1/M2:
-\begin{enumerate}
-  \item \textbf{Inter-cell correlations}: flows model the full joint
-        distribution; M1/M2 correct cells independently.
-  \item \textbf{No binning artefacts}: continuous conditioning replaces
-        discrete $\abseta$ and \pt\ bins.
-  \item \textbf{Non-linear transformations}: handle complex
-        distributional differences that linear methods miss.
-  \item \textbf{Scalability}: the same architecture works for different
-        calorimeter layers or cluster sizes.
-\end{enumerate}
-
-Practical challenges include:
+Machine-learning approaches offer the theoretical promise of superior
+corrections but face practical challenges:
 \begin{itemize}
   \item \textbf{Training data}: the $Z \to \ell\ell\gamma$ sample
-        provides $\sim$$150\,\text{K}$ data events and
-        $\sim$$2.4\,\text{M}$ MC events, which may be limiting for
-        77-dimensional flows.
+        provides $\sim$$200\,\text{k}$ data events and
+        $\sim$$2.8\,\text{M}$ MC events (unconverted, combined channel).
+        This may be limiting for 77-dimensional flows.
   \item \textbf{Overfitting}: regularisation, early stopping, and
-        validation splits are essential.
+        validation splits are essential; the corrections must be
+        evaluated on a statistically independent dataset.
   \item \textbf{Inference in C++}: ATLAS production workflows require
         fast C++ inference, necessitating ONNX export or equivalent.
   \item \textbf{Transferability}: corrections derived on FSR photons
         must be validated for other photon populations (e.g.\ $H \to
-        \gamma\gamma$).
+        \gamma\gamma$, $\gamma$+jets), where the \pt\ spectrum and
+        isolation environment differ.
 \end{itemize}
+
+Given the M2 instability results, normalising flows represent the most
+promising direction: they avoid explicit moment matching, preserve the
+full multivariate structure, and can be conditioned on kinematics
+continuously.
 
 
 %% ====================================================================
@@ -735,25 +969,38 @@ This note documents a cell-level energy reweighting pipeline for
 correcting photon shower shape variables (\Reta, \Rphi, \weta) in ATLAS
 Run\,3 simulation.  Using $Z \to \ell\ell\gamma$ events from 2024 data
 and MC23e, corrections are derived and applied in 14~$\abseta$ bins
-across three decay channels and three conversion scenarios.
+across three decay channels and three conversion scenarios (nine
+configurations total, $\sim$$250\,\text{k}$ data events in the
+combined unconverted sample).
 
 Two methods are implemented:
 \begin{itemize}
-  \item \textbf{M1 (flat shift)}: corrects the mean cell fraction with
-        exact energy conservation.  Provides robust improvement for
-        \Reta\ and \Rphi.
+  \item \textbf{M1 (flat shift)}: corrects the mean cell energy fraction
+        with exact energy conservation.  Reduces the average $\chisq$
+        by factors of 2--11 across all scenarios.  M1 is the
+        \textbf{recommended cell-level method}: it is stable in every
+        $\abseta$ bin, requires no regularisation, and achieves
+        performance within $\sim$30\% of the empirical fudge factors.
   \item \textbf{M2 (shift+stretch)}: additionally matches the cell
-        fraction variance, following Francisco Almeida's method.
-        Provides further improvement for \weta.
+        fraction variance.  \textbf{Not recommended} in its current form
+        due to catastrophic instabilities in specific $\abseta$ bins
+        (up to $90\times$ worse than uncorrected MC), caused by
+        divergent variance ratios in peripheral cells.  Regularisation
+        of the stretch factor (Section~\ref{sec:future-regularisation})
+        is required before M2 can be used reliably.
 \end{itemize}
 
-The ATLAS fudge factors remain the established benchmark.  The cell-level
-methods offer a complementary approach that operates at a more
-fundamental level and preserves inter-cell physics.
+Fudge factors remain the most precise per-variable corrections,
+marginally outperforming M1.  However, cell-level corrections offer
+two distinct advantages: (a)~a single set of corrections simultaneously
+improves \emph{all} observables built from cell energies, and (b)~the
+inter-variable correlations are preserved by construction.
 
-Future directions include differential $\pt \times \abseta$ binning
-strategies and machine-learning approaches (normalising flows, quantile
-mapping) that can model the full multivariate cell energy distribution.
+Priority directions for future work include regularisation of M2
+(Section~\ref{sec:future-regularisation}), $\pt$-differential
+corrections (Section~\ref{sec:future-pt}), and normalising flows
+that avoid explicit moment matching entirely
+(Section~\ref{sec:future-ml}).
 
 
 %% ====================================================================
@@ -780,11 +1027,6 @@ channel and conversion scenario combinations.
   M.~Fernandes da Silva,
   ``Photon shower shape studies with Run\,3 data'',
   ATL-COM-PHYS-2025-662 (2025).
-
-\bibitem{atlas-fudge}
-  ATLAS Collaboration,
-  ``Photon identification and shower shape corrections'',
-  internal ATLAS documentation and calibrations.
 
 \bibitem{papamakarios}
   G.~Papamakarios, E.~Nalisnick, D.~J.~Rezende, S.~Mohamed, and

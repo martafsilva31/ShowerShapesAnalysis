@@ -65,9 +65,13 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │           ├── histograms.root
 │           └── plots/
 ├── report/                    # Reports and documentation
-│   ├── egam3_problem_report.md
-│   ├── weta2_investigation_summary.md
-│   └── data_mc_comparison_report.tex
+│   ├── egam3_problem_report.md            # DAOD_EGAM3 problem analysis
+│   ├── weta2_investigation_summary.md     # w_eta_2 study summary
+│   ├── closure_test_report.tex            # MC closure test report
+│   ├── cell_reweighting_report.tex        # Physics report: M1/M2 pipeline (current)
+│   ├── chi2_yields.tex                    # Auto-generated event yield table
+│   ├── chi2_summary.tex                   # Auto-generated chi-squared summary
+│   └── chi2_tables.tex                    # Auto-generated per-eta chi-squared tables
 └── setup.sh                   # Environment: setupATLAS + Athena 25.0.40 + NTupleMaker build
 ```
 

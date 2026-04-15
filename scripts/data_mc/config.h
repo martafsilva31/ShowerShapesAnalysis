@@ -436,57 +436,16 @@ namespace config {
         }
     }
 
-    // Sum-of-weights from h_sumW histograms in the NTupleMaker output files.
+    // Sum-of-weights from AMI (EVNT level, full MC sample).
     //
-    // h_sumW is a TH1F with 3 bins filled at DAOD level:
-    //   bin 1 = InitialEvents
-    //   bin 2 = SumOfWeights   ← used here
-    //   bin 3 = SumOfWeights2
+    //   DSID 700770  Sh_2214_eegamma   sumW = 5.269047e+14  (totalEvents = 185,402,000)
+    //   DSID 700771  Sh_2214_mumugamma sumW = 5.421893e+14  (totalEvents = 189,985,000)
     //
-    // Files are matched to DSIDs by filename substring:
-    //   "eegamma"   → DSID 700770
-    //   "mumugamma" → DSID 700771
-    //
-    // For a comma-separated list of files (llgamma channel), each file is
-    // opened individually and its bin 2 value is added to the running total
-    // for the corresponding DSID.
-    inline std::map<int, double> computeSumWeightsFromFiles(const char* mcFiles) {
+    // The mcFiles argument is kept for API compatibility but is not used.
+    inline std::map<int, double> computeSumWeightsFromFiles(const char* /*mcFiles*/) {
         std::map<int, double> result;
-        TString flist(mcFiles);
-        TObjArray* arr = flist.Tokenize(",");
-        for (int i = 0; i < arr->GetEntries(); i++) {
-            TString fname = ((TObjString*)arr->At(i))->GetString();
-            fname = fname.Strip(TString::kBoth);
-            TFile* f = TFile::Open(fname);
-            if (!f || f->IsZombie()) {
-                std::cerr << "WARNING: cannot open " << fname
-                          << " for sumW reading\n";
-                if (f) delete f;
-                continue;
-            }
-            TH1F* h = (TH1F*)f->Get("h_sumW");
-            if (!h) {
-                std::cerr << "WARNING: h_sumW not found in " << fname << "\n";
-                f->Close(); delete f; continue;
-            }
-            double sw = h->GetBinContent(2);
-            int dsid = 0;
-            if (fname.Contains("eegamma"))    dsid = 700770;
-            else if (fname.Contains("mumugamma")) dsid = 700771;
-            if (dsid > 0) {
-                result[dsid] += sw;
-                std::cout << "  h_sumW bin2(" << fname << ") DSID "
-                          << dsid << " += " << sw << "\n";
-            } else {
-                std::cerr << "WARNING: cannot determine DSID from filename: "
-                          << fname << "\n";
-            }
-            f->Close(); delete f;
-        }
-        delete arr;
-        for (auto& kv : result)
-            std::cout << "  sumW[" << kv.first << "] = " << kv.second
-                      << "  (h_sumW, DAOD)" << std::endl;
+        result[700770] = 5.269047e+14;   // Sh_2214_eegamma   (AMI EVNT)
+        result[700771] = 5.421893e+14;   // Sh_2214_mumugamma (AMI EVNT)
         return result;
     }
 

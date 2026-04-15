@@ -120,11 +120,39 @@ def generate_tex(channel, scenario):
     lines.append(chi2_table)
     lines.append("\n\\clearpage\n")
 
-    # ── Section 2: Shower shape comparisons (50 bins) ─────────────
+    # ── Section: Integrated shower shape comparisons ──────────────
     lines.append(r"""
 %% ====================================================================
-\section{Shower Shape Comparisons (50 bins)}
-\label{sec:shower-50}
+\section{Integrated Shower Shape Comparisons}
+\label{sec:shower-integrated}
+%% ====================================================================
+
+Data versus uncorrected MC, M1, and M2 corrections (all $|\eta|$ bins combined).
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=1]{rew_integrated.pdf}
+  \caption{$R_{\eta}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=2]{rew_integrated.pdf}
+  \caption{$R_{\phi}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=3]{rew_integrated.pdf}
+  \caption{$w_{\eta 2}$}
+\end{subfigure}
+\caption{Integrated shower shape comparisons: Data vs uncorrected MC, M1 and M2.}
+\end{figure}
+\clearpage
+""")
+
+    # ── Section: Per-eta shower shape comparisons ─────────────────
+    lines.append(r"""
+%% ====================================================================
+\section{Per-$|\eta|$ Shower Shape Comparisons}
+\label{sec:shower}
 %% ====================================================================
 
 Data versus uncorrected MC, M1, and M2 corrections for each $|\eta|$ bin.
@@ -148,106 +176,145 @@ Data versus uncorrected MC, M1, and M2 corrections for each $|\eta|$ bin.
   \includegraphics[width=\textwidth,page=%d]{rew_weta2.pdf}
   \caption{$w_{\eta 2}$}
 \end{subfigure}
-\caption{Shower shape comparisons (50 bins), $|\eta| \in %s$.}
+\caption{Shower shape comparisons, $|\eta| \in %s$.}
 \end{figure}
 """ % (eta, page_idx, page_idx, page_idx, eta))
 
     lines.append("\\clearpage\n")
 
-    # ── Section 3: Shower shape comparisons (25 bins) ─────────────
+    # ── Section: Fudge factor benchmark (integrated) ─────────────
     lines.append(r"""
 %% ====================================================================
-\section{Shower Shape Comparisons (25 bins)}
-\label{sec:shower-25}
+\section{Fudge Factor Comparison (Integrated)}
+\label{sec:fudge}
 %% ====================================================================
 
-Same as above with coarser (25-bin) histograms.
+Stored (fudged) branch values versus unfudged MC and data.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=1]{fudge_factors.pdf}
+  \caption{$R_{\eta}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=2]{fudge_factors.pdf}
+  \caption{$R_{\phi}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=3]{fudge_factors.pdf}
+  \caption{$w_{\eta 2}$}
+\end{subfigure}
+\caption{Fudge factor comparison: Data (stored) vs MC (fudged) vs MC (unfudged).}
+\end{figure}
+\clearpage
+""")
+
+    var_names = [r"$R_{\eta}$", r"$R_{\phi}$", r"$w_{\eta 2}$"]
+
+    # ── Section: Fudge factor per-eta ────────────────────────────
+    lines.append(r"""
+%% ====================================================================
+\section{Fudge Factor Comparison (Per $|\eta|$ Bin)}
+\label{sec:fudge-eta}
+%% ====================================================================
+
+Data (stored) vs MC (fudged) vs MC (unfudged) per $|\eta|$ bin.
 """)
 
     for page_idx in range(1, N_PAGES + 1):
         eta = ETA_LABELS[page_idx - 1]
+        pg_reta  = page_idx
+        pg_rphi  = page_idx + N_PAGES
+        pg_weta2 = page_idx + 2 * N_PAGES
         lines.append(r"""
 \subsection*{$|\eta| \in %s$}
 \begin{figure}[H]
 \centering
 \begin{subfigure}[b]{0.32\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{rew_reta_25bins.pdf}
+  \includegraphics[width=\textwidth,page=%d]{fudge_factors_eta.pdf}
   \caption{$R_{\eta}$}
 \end{subfigure}\hfill
 \begin{subfigure}[b]{0.32\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{rew_rphi_25bins.pdf}
+  \includegraphics[width=\textwidth,page=%d]{fudge_factors_eta.pdf}
   \caption{$R_{\phi}$}
 \end{subfigure}\hfill
 \begin{subfigure}[b]{0.32\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{rew_weta2_25bins.pdf}
+  \includegraphics[width=\textwidth,page=%d]{fudge_factors_eta.pdf}
   \caption{$w_{\eta 2}$}
 \end{subfigure}
-\caption{Shower shape comparisons (25 bins), $|\eta| \in %s$.}
+\caption{Fudge factors, $|\eta| \in %s$.}
 \end{figure}
-""" % (eta, page_idx, page_idx, page_idx, eta))
+""" % (eta, pg_reta, pg_rphi, pg_weta2, eta))
 
     lines.append("\\clearpage\n")
 
-    # ── Section 4: Fudge factor benchmark ─────────────────────────
+    # ── Section: Computed vs Stored (integrated) ─────────────────
     lines.append(r"""
 %% ====================================================================
-\section{Fudge Factor Comparison}
-\label{sec:fudge}
-%% ====================================================================
-
-Stored (fudged) branch values versus unfudged MC and data.
-""")
-
-    for page_idx in range(1, 4):  # 3 pages: reta, rphi, weta2
-        var_names = [r"$R_{\eta}$", r"$R_{\phi}$", r"$w_{\eta 2}$"]
-        lines.append(r"""
-\begin{figure}[H]
-\centering
-\begin{subfigure}[b]{0.48\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{fudge_factors.pdf}
-  \caption{50 bins}
-\end{subfigure}\hfill
-\begin{subfigure}[b]{0.48\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{fudge_factors_25bins.pdf}
-  \caption{25 bins}
-\end{subfigure}
-\caption{Fudge factor comparison: %s.}
-\end{figure}
-""" % (page_idx, page_idx, var_names[page_idx - 1]))
-
-    lines.append("\\clearpage\n")
-
-    # ── Section 5: Computed vs Stored validation ──────────────────
-    lines.append(r"""
-%% ====================================================================
-\section{Computed vs.\ Stored Validation}
+\section{Computed vs.\ Stored Validation (Integrated)}
 \label{sec:comp-vs-stor}
 %% ====================================================================
 
-Shower shapes computed from cell energies versus the branch-stored values,
-verifying the cell-level computation reproduces the standard ATLAS values.
-""")
+Shower shapes computed from cell energies versus the branch-stored values.
 
-    for page_idx in range(1, 4):
-        var_names = [r"$R_{\eta}$", r"$R_{\phi}$", r"$w_{\eta 2}$"]
-        lines.append(r"""
 \begin{figure}[H]
 \centering
-\begin{subfigure}[b]{0.48\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{computed_vs_stored.pdf}
-  \caption{50 bins}
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=1]{computed_vs_stored.pdf}
+  \caption{$R_{\eta}$}
 \end{subfigure}\hfill
-\begin{subfigure}[b]{0.48\textwidth}
-  \includegraphics[width=\textwidth,page=%d]{computed_vs_stored_25bins.pdf}
-  \caption{25 bins}
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=2]{computed_vs_stored.pdf}
+  \caption{$R_{\phi}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=3]{computed_vs_stored.pdf}
+  \caption{$w_{\eta 2}$}
 \end{subfigure}
-\caption{Computed vs.\ stored: %s.}
+\caption{Computed (from cells) vs stored (branch) shower shapes.}
 \end{figure}
-""" % (page_idx, page_idx, var_names[page_idx - 1]))
+\clearpage
+""")
+
+    # ── Section: Computed vs Stored per-eta ──────────────────────
+    lines.append(r"""
+%% ====================================================================
+\section{Computed vs.\ Stored (Per $|\eta|$ Bin)}
+\label{sec:comp-vs-stor-eta}
+%% ====================================================================
+
+Cell-computed vs branch-stored data per $|\eta|$ bin.
+""")
+
+    for page_idx in range(1, N_PAGES + 1):
+        eta = ETA_LABELS[page_idx - 1]
+        pg_reta  = page_idx
+        pg_rphi  = page_idx + N_PAGES
+        pg_weta2 = page_idx + 2 * N_PAGES
+        lines.append(r"""
+\subsection*{$|\eta| \in %s$}
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=%d]{computed_vs_stored_eta.pdf}
+  \caption{$R_{\eta}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=%d]{computed_vs_stored_eta.pdf}
+  \caption{$R_{\phi}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.32\textwidth}
+  \includegraphics[width=\textwidth,page=%d]{computed_vs_stored_eta.pdf}
+  \caption{$w_{\eta 2}$}
+\end{subfigure}
+\caption{Computed vs.\ stored, $|\eta| \in %s$.}
+\end{figure}
+""" % (eta, pg_reta, pg_rphi, pg_weta2, eta))
 
     lines.append("\\clearpage\n")
 
-    # ── Section 6: Cell energy profiles ───────────────────────────
+    # ── Section 7: Cell energy profiles ───────────────────────────
     lines.append(r"""
 %% ====================================================================
 \section{Cell Energy Fraction Profiles}
@@ -286,7 +353,7 @@ $(\eta \times \phi)$ grid.  Each page shows one $|\eta|$ bin.
 
     lines.append("\\clearpage\n")
 
-    # ── Section 7: Cell corrections ───────────────────────────────
+    # ── Section 8: Cell corrections ───────────────────────────────
     lines.append(r"""
 %% ====================================================================
 \section{Cell-Level Corrections}
@@ -315,6 +382,25 @@ M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 """ % (eta, page_idx, page_idx, eta))
 
     lines.append(r"""
+
+%% ====================================================================
+\section{Kinematics}
+\label{sec:kinematics}
+%% ====================================================================
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{kinematics_pt.pdf}
+  \caption{Photon $p_{\mathrm{T}}$}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{kinematics_eta.pdf}
+  \caption{Photon $|\eta|$}
+\end{subfigure}
+\caption{Normalised kinematic distributions: Data vs MC.}
+\end{figure}
+
 \end{document}
 """)
 
@@ -325,8 +411,8 @@ M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 def build_compendium(channel, scenario):
     """Generate and compile one compendium PDF."""
     out_dir = os.path.join(BASE, channel, scenario)
-    tex_name = "result_compendium.tex"
-    pdf_name = "result_compendium.pdf"
+    tex_name = f"result_compendium_{channel}_{scenario}.tex"
+    pdf_name = f"result_compendium_{channel}_{scenario}.pdf"
     tex_path = os.path.join(out_dir, tex_name)
 
     print(f"\n{'='*60}")
@@ -347,7 +433,7 @@ def build_compendium(channel, scenario):
         )
         if result.returncode != 0 and pass_num == 2:
             print(f"  WARNING: pdflatex returned non-zero on pass {pass_num}")
-            log_file = os.path.join(out_dir, "result_compendium.log")
+            log_file = os.path.join(out_dir, f"result_compendium_{channel}_{scenario}.log")
             if os.path.exists(log_file):
                 with open(log_file) as lf:
                     log_lines = lf.readlines()
@@ -358,7 +444,7 @@ def build_compendium(channel, scenario):
 
     # Clean auxiliary files
     for ext in ("aux", "log", "out", "toc"):
-        aux = os.path.join(out_dir, f"result_compendium.{ext}")
+        aux = os.path.join(out_dir, f"result_compendium_{channel}_{scenario}.{ext}")
         if os.path.exists(aux):
             os.remove(aux)
 

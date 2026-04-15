@@ -91,13 +91,13 @@ void extract_chi2(
     const char* vars[nVar]    = {"reta", "rphi", "weta2"};
     const char* varTeX[nVar]  = {"$R_{\\eta}$", "$R_{\\phi}$", "$w_{\\eta 2}$"};
 
-    const int nMeth = 3;  // MC, M1, M2
+    const int nMeth = 4;  // MC, M1, M2, Fudged
 
     // ============================================================
     // Result storage
     // ============================================================
     struct EtaResult {
-        double v[3];  // chi2/ndf for MC, M1, M2
+        double v[4];  // chi2/ndf for MC, M1, M2, Fudged
         bool valid;
     };
     struct ScenResult {
@@ -112,7 +112,7 @@ void extract_chi2(
             R[ic][is].nData = R[ic][is].nMC = 0;
             for (int ie = 0; ie < kNEtaBins; ++ie)
                 for (int iv = 0; iv < nVar; ++iv)
-                    R[ic][is].eta[ie][iv] = {{-1, -1, -1}, false};
+                    R[ic][is].eta[ie][iv] = {{-1, -1, -1, -1}, false};
         }
 
     // ============================================================
@@ -164,9 +164,19 @@ void extract_chi2(
                     r.v[0] = (nd && nmc) ? chi2ndf(nmc, nd) : -1;
                     r.v[1] = (nd && nm1) ? chi2ndf(nm1, nd) : -1;
                     r.v[2] = (nd && nm2) ? chi2ndf(nm2, nd) : -1;
+
+                    // Fudge factor chi2: Data(stored) vs MC(fudged)
+                    TH1D* hds = (TH1D*)f->Get(
+                        Form("h_%s_data_stored%s", vars[iv], suf.Data()));
+                    TH1D* hmf = (TH1D*)f->Get(
+                        Form("h_%s_mc_fudged%s", vars[iv], suf.Data()));
+                    TH1D* nds = normClone(hds, "nds");
+                    TH1D* nmf = normClone(hmf, "nmf");
+                    r.v[3] = (nds && nmf) ? chi2ndf(nmf, nds) : -1;
                     r.valid = (r.v[0] >= 0);
 
                     delete nd; delete nmc; delete nm1; delete nm2;
+                    delete nds; delete nmf;
                 }
             }
             f->Close();
@@ -177,8 +187,8 @@ void extract_chi2(
     // ============================================================
     // Compute averages: avg[chan][scen][var][method]
     // ============================================================
-    double avg[3][3][3][3] = {};
-    int    cnt[3][3][3][3] = {};
+    double avg[3][3][3][4] = {};
+    int    cnt[3][3][3][4] = {};
 
     for (int ic = 0; ic < nChan; ++ic)
         for (int is = 0; is < nScen; ++is)
@@ -214,7 +224,8 @@ void extract_chi2(
                 std::cout << "  " << vars[iv]
                           << ":  MC=" << avg[ic][is][iv][0]
                           << "  M1=" << avg[ic][is][iv][1]
-                          << "  M2=" << avg[ic][is][iv][2] << "\n";
+                          << "  M2=" << avg[ic][is][iv][2]
+                          << "  Fudged=" << avg[ic][is][iv][3] << "\n";
         }
     }
 
@@ -267,17 +278,18 @@ void extract_chi2(
         out << "\\label{tab:chi2-summary}\n";
         out << "\\resizebox{\\textwidth}{!}{%\n";
         out << "\\begin{tabular}{ll";
-        for (int iv = 0; iv < nVar; ++iv) out << "|rrr";
+        for (int iv = 0; iv < nVar; ++iv) out << "|rrrr";
         out << "}\n";
         out << "\\toprule\n";
         out << " & ";
         for (int iv = 0; iv < nVar; ++iv)
-            out << "& \\multicolumn{3}{" << (iv < nVar - 1 ? "c|" : "c")
+            out << "& \\multicolumn{4}{"
+                << (iv < nVar - 1 ? "c|" : "c")
                 << "}{" << varTeX[iv] << "} ";
         out << "\\\\\n";
         out << "Channel & Scenario ";
         for (int iv = 0; iv < nVar; ++iv)
-            out << "& MC & M1 & M2 ";
+            out << "& MC & M1 & M2 & Fudged ";
         out << "\\\\\n";
         out << "\\midrule\n";
         for (int ic = 0; ic < nChan; ++ic) {
@@ -319,18 +331,18 @@ void extract_chi2(
                     << " scenario.  Columns show $\\chisq$ between "
                        "each MC variant and data (cell-computed).}\n";
                 out << "\\label{" << label << "}\n";
-                out << "\\small\n";
-                out << "\\begin{tabular}{r|rrr|rrr|rrr}\n";
+                out << "\\resizebox{\\textwidth}{!}{%\n";
+                out << "\\begin{tabular}{r|rrrr|rrrr|rrrr}\n";
                 out << "\\toprule\n";
                 out << "$|\\eta|$ bin ";
                 for (int iv = 0; iv < nVar; ++iv)
-                    out << "& \\multicolumn{3}{"
+                    out << "& \\multicolumn{4}{"
                         << (iv < nVar - 1 ? "c|" : "c")
                         << "}{" << varTeX[iv] << "} ";
                 out << "\\\\\n";
                 out << "(range) ";
                 for (int iv = 0; iv < nVar; ++iv)
-                    out << "& MC & M1 & M2 ";
+                    out << "& MC & M1 & M2 & Fud ";
                 out << "\\\\\n";
                 out << "\\midrule\n";
 
@@ -340,7 +352,7 @@ void extract_chi2(
                     out << Form("{[}%.2f, %.2f)",
                                 kEtaLimits[ie], kEtaLimits[ie + 1]);
                     for (int iv = 0; iv < nVar; ++iv)
-                        for (int im = 0; im < 3; ++im)  // MC, M1, M2
+                        for (int im = 0; im < 4; ++im)  // MC, M1, M2, Fud
                             out << " & "
                                 << fmtChi2(R[ic][is].eta[ie][iv].v[im]);
                     out << " \\\\\n";
@@ -350,11 +362,11 @@ void extract_chi2(
                 out << "\\midrule\n";
                 out << "Average";
                 for (int iv = 0; iv < nVar; ++iv)
-                    for (int im = 0; im < 3; ++im)
+                    for (int im = 0; im < 4; ++im)
                         out << " & " << fmtChi2(avg[ic][is][iv][im]);
                 out << " \\\\\n";
                 out << "\\bottomrule\n";
-                out << "\\end{tabular}\n";
+                out << "\\end{tabular}}\n";
                 out << "\\end{table}\n\n";
             }
         }
