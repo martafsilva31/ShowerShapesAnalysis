@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import argparse
 
 # ── Configuration ──────────────────────────────────────────────────────
 BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -69,9 +70,10 @@ def extract_chi2_table(channel, scenario):
 
 
 # ── LaTeX document generation ────────────────────────────────────────
-def generate_tex(channel, scenario):
+def generate_tex(channel, scenario, base_dir=None, skip_kinematics=False):
     """Generate the full LaTeX source for one compendium."""
-    plots_dir = os.path.join(BASE, channel, scenario, "plots")
+    _base = base_dir if base_dir else BASE
+    plots_dir = os.path.join(_base, channel, scenario, "plots")
     # graphicspath relative to the .tex file location (channel/scenario/)
     rel_plots = "plots"
 
@@ -381,7 +383,9 @@ M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 \end{figure}
 """ % (eta, page_idx, page_idx, eta))
 
-    lines.append(r"""
+    # ── Section: Kinematics (optional) ────────────────────────────
+    if not skip_kinematics:
+        lines.append(r"""
 
 %% ====================================================================
 \section{Kinematics}
@@ -403,14 +407,17 @@ M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 
 \end{document}
 """)
+    else:
+        lines.append("\n\\end{document}\n")
 
     return "".join(lines)
 
 
 # ── Build one compendium ─────────────────────────────────────────────
-def build_compendium(channel, scenario):
+def build_compendium(channel, scenario, base_dir=None, skip_kinematics=False):
     """Generate and compile one compendium PDF."""
-    out_dir = os.path.join(BASE, channel, scenario)
+    _base = base_dir if base_dir else BASE
+    out_dir = os.path.join(_base, channel, scenario)
     tex_name = f"result_compendium_{channel}_{scenario}.tex"
     pdf_name = f"result_compendium_{channel}_{scenario}.pdf"
     tex_path = os.path.join(out_dir, tex_name)
@@ -420,7 +427,9 @@ def build_compendium(channel, scenario):
     print(f"{'='*60}")
 
     # Generate LaTeX
-    tex_src = generate_tex(channel, scenario)
+    tex_src = generate_tex(channel, scenario,
+                           base_dir=base_dir,
+                           skip_kinematics=skip_kinematics)
     with open(tex_path, "w") as f:
         f.write(tex_src)
     print(f"  Written: {tex_path}")
@@ -460,9 +469,28 @@ def build_compendium(channel, scenario):
 
 # ── Main ─────────────────────────────────────────────────────────────
 def main():
-    if len(sys.argv) == 3:
-        channels = [sys.argv[1]]
-        scenarios = [sys.argv[2]]
+    parser = argparse.ArgumentParser(
+        description="Build result compendium PDFs for cell-energy reweighting.")
+    parser.add_argument("channel", nargs="?", default=None,
+                        help="Single channel (eegamma, mumugamma, llgamma)")
+    parser.add_argument("scenario", nargs="?", default=None,
+                        help="Single scenario (baseline, converted, all_conv)")
+    parser.add_argument("--base-dir", default=None,
+                        help="Override base output directory")
+    parser.add_argument("--no-kinematics", action="store_true",
+                        help="Omit the Kinematics section from the compendium")
+    parser.add_argument("--channels", nargs="+", default=None,
+                        help="List of channels to build")
+    parser.add_argument("--scenarios", nargs="+", default=None,
+                        help="List of scenarios to build")
+    args = parser.parse_args()
+
+    if args.channel and args.scenario:
+        channels = [args.channel]
+        scenarios = [args.scenario]
+    elif args.channels or args.scenarios:
+        channels = args.channels or CHANNELS
+        scenarios = args.scenarios or SCENARIOS
     else:
         channels = CHANNELS
         scenarios = SCENARIOS
@@ -470,7 +498,9 @@ def main():
     ok, fail = 0, 0
     for ch in channels:
         for sc in scenarios:
-            if build_compendium(ch, sc):
+            if build_compendium(ch, sc,
+                                base_dir=args.base_dir,
+                                skip_kinematics=args.no_kinematics):
                 ok += 1
             else:
                 fail += 1

@@ -161,10 +161,13 @@ void drawKinPanel(TH1D* hData, TH1D* hMC, TH1D* hMCnosf,
 int plot_kinematics(const char* channel  = "eegamma",
                     const char* scenario = "baseline",
                     const char* baseDir  =
-                        "../../output/cell_energy_reweighting_Francisco_method/data24") {
+                        "../../output/cell_energy_reweighting_Francisco_method/data24",
+                    int normalise = 0,
+                    const char* selectionOverride = "") {
 
     const char* chLabel   = channelLabel(channel);
-    const char* scenLabel = scenarioLabel(scenario);
+    const char* scenLabel = scenarioLabel(
+        (strlen(selectionOverride) > 0) ? selectionOverride : scenario);
 
     gStyle->SetOptStat(0);
     gStyle->SetOptTitle(0);
@@ -190,8 +193,17 @@ int plot_kinematics(const char* channel  = "eegamma",
         TH1D* hm    = (TH1D*)f->Get("h_pt_mc");
         TH1D* hmnsf = (TH1D*)f->Get("h_pt_mc_nosf");
         if (hd && hm) {
-            TString pdf = plotDir + "kinematics_pt.pdf";
-            drawKinPanel(hd, hm, hmnsf, "Photon p_{T} [GeV]", "Events",
+            if (normalise) {
+                hd = (TH1D*)hd->Clone("hd_pt_n");
+                hm = (TH1D*)hm->Clone("hm_pt_n");
+                if (hmnsf) hmnsf = (TH1D*)hmnsf->Clone("hmnsf_pt_n");
+                if (hd->Integral() > 0) hd->Scale(1.0 / hd->Integral());
+                if (hm->Integral() > 0) hm->Scale(1.0 / hm->Integral());
+                if (hmnsf && hmnsf->Integral() > 0) hmnsf->Scale(1.0 / hmnsf->Integral());
+            }
+            TString pdf = plotDir + (normalise ? "kinematics_pt_norm.pdf" : "kinematics_pt.pdf");
+            drawKinPanel(hd, hm, hmnsf, "Photon p_{T} [GeV]",
+                         normalise ? "Normalised" : "Events",
                          chLabel, scenLabel, c);
             c->SaveAs(pdf);
             std::cout << "Created: " << pdf << std::endl;
@@ -206,8 +218,17 @@ int plot_kinematics(const char* channel  = "eegamma",
         TH1D* hm    = (TH1D*)f->Get("h_eta_mc");
         TH1D* hmnsf = (TH1D*)f->Get("h_eta_mc_nosf");
         if (hd && hm) {
-            TString pdf = plotDir + "kinematics_eta.pdf";
-            drawKinPanel(hd, hm, hmnsf, "Photon |#eta|", "Events",
+            if (normalise) {
+                hd = (TH1D*)hd->Clone("hd_eta_n");
+                hm = (TH1D*)hm->Clone("hm_eta_n");
+                if (hmnsf) hmnsf = (TH1D*)hmnsf->Clone("hmnsf_eta_n");
+                if (hd->Integral() > 0) hd->Scale(1.0 / hd->Integral());
+                if (hm->Integral() > 0) hm->Scale(1.0 / hm->Integral());
+                if (hmnsf && hmnsf->Integral() > 0) hmnsf->Scale(1.0 / hmnsf->Integral());
+            }
+            TString pdf = plotDir + (normalise ? "kinematics_eta_norm.pdf" : "kinematics_eta.pdf");
+            drawKinPanel(hd, hm, hmnsf, "Photon |#eta|",
+                         normalise ? "Normalised" : "Events",
                          chLabel, scenLabel, c);
             c->SaveAs(pdf);
             std::cout << "Created: " << pdf << std::endl;
@@ -216,8 +237,8 @@ int plot_kinematics(const char* channel  = "eegamma",
         }
     }
 
-    // --- Zero-padding diagnostic ---
-    {
+    // --- Zero-padding diagnostic (skip in normalised mode) ---
+    if (!normalise) {
         TH1D* hd = (TH1D*)f->Get("h_nzero_data");
         TH1D* hm = (TH1D*)f->Get("h_nzero_mc");
         if (hd && hm) {

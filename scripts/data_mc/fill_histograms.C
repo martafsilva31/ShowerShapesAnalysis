@@ -60,7 +60,8 @@ struct Corrections {
 void fill_histograms(const char* channel  = "eegamma",
                      const char* scenario = "baseline",
                      const char* baseDir  =
-                         "../../output/cell_energy_reweighting_Francisco_method/data24") {
+                         "../../output/cell_energy_reweighting_Francisco_method/data24",
+                     const char* selectionOverride = "") {
 
     TH1::SetDefaultSumw2(true);
 
@@ -81,7 +82,8 @@ void fill_histograms(const char* channel  = "eegamma",
         return;
     }
 
-    Selection sel = getSelection(scenario);
+    Selection sel = getSelection(
+        (strlen(selectionOverride) > 0) ? selectionOverride : scenario);
 
     // --------------------------------------------------------
     // Output
@@ -451,6 +453,7 @@ void fill_histograms(const char* channel  = "eegamma",
 
             // M2: shift + stretch
             double str = (sig_m > 1e-12) ? sig_d / sig_m : 1.0;
+            if (mu_m < kMinFracForM2) str = 1.0;  // peripheral cell: fall back to M1
             corr.stretch[e][k] = str;
             corr.shift[e][k]   = mu_d - str * mu_m;
 

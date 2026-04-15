@@ -44,6 +44,10 @@ namespace config {
     const double kDeltaEta = 0.025;
     const double kDeltaPhi = 0.0245;
 
+    // Peripheral-cell threshold for M2 regularisation:
+    // cells with <f_k> below this fall back to M1 (stretch=1).
+    const double kMinFracForM2 = 0.002;
+
     // ======================================================================
     // Eta binning (14 bins, crack at bin 8)
     // ======================================================================
@@ -131,6 +135,24 @@ namespace config {
         return s;
     }
 
+    inline Selection isoTightConvertedSelection() {
+        Selection s;
+        s.requireTightIso = true;
+        s.requireLooseIso = false;
+        s.unconvertedOnly = false;
+        s.convertedOnly   = true;
+        return s;
+    }
+
+    inline Selection isoTightAllConvSelection() {
+        Selection s;
+        s.requireTightIso = true;
+        s.requireLooseIso = false;
+        s.unconvertedOnly = false;
+        s.convertedOnly   = false;
+        return s;
+    }
+
     inline Selection getSelection(const std::string& name) {
         if (name == "baseline")            return baselineSelection();
         if (name == "converted")           return convertedSelection();
@@ -139,6 +161,8 @@ namespace config {
         if (name == "iso_tight")           return isoTightSelection();
         if (name == "no_iso")              return noIsoSelection();
         if (name == "tight_id_tight_iso")  return tightIDTightIsoSelection();
+        if (name == "iso_tight_converted")   return isoTightConvertedSelection();
+        if (name == "iso_tight_all_conv")    return isoTightAllConvSelection();
         std::cerr << "ERROR: Unknown scenario '" << name << "'" << std::endl;
         return baselineSelection();
     }
@@ -160,8 +184,10 @@ namespace config {
         if (sc == "converted")   return "Converted #gamma, no ID, loose iso";
         if (sc == "all_conv")    return "All #gamma, no ID, loose iso";
         if (sc == "tight_id")    return "Unconverted #gamma, tight ID, loose iso";
-        if (sc == "iso_tight")   return "Unconverted #gamma, no ID, tight iso";
-        if (sc == "no_iso")      return "Unconverted #gamma, no ID, no iso";
+        if (sc == "iso_tight")             return "Unconverted #gamma, no ID, tight iso";
+        if (sc == "iso_tight_converted")   return "Converted #gamma, no ID, tight iso";
+        if (sc == "iso_tight_all_conv")    return "All #gamma, no ID, tight iso";
+        if (sc == "no_iso")                return "Unconverted #gamma, no ID, no iso";
         return scenario;
     }
 
