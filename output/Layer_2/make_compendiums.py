@@ -483,14 +483,8 @@ M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
             L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
                                r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
                                rf"Correction maps, {eta_label(lo, hi)}."))
-    elif shift_pages >= 1 and stretch_pages >= 1:
-        # eta_pt mode: only 1 integrated page; include it once
-        L.append(r"\subsection*{Integrated (all $|\eta|$ bins)}")
-        L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", 1,
-                           r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                           r"Correction maps, integrated over $|\eta|$."))
     else:
-        L.append(r"\textit{Cell-level correction plots not available.}")
+        L.append(r"\textit{Cell-level correction plots not available (see per-$p_{\mathrm{T}}$ section).}")
 
     # ── Section 9b: Per-pT Cell-Level Corrections (eta_pt only) ──
     if have("cell_shift_pt00.pdf"):
