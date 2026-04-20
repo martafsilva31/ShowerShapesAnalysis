@@ -188,7 +188,7 @@ namespace config {
         static TString buf;  // static to survive return
         if      (sc == "unconverted") buf = Form("Unconverted #gamma, no ID, %s", isoLabel.Data());
         else if (sc == "converted")   buf = Form("Converted #gamma, no ID, %s",   isoLabel.Data());
-        else if (sc == "inclusive")    buf = Form("Inclusive #gamma, no ID, %s",    isoLabel.Data());
+        else if (sc == "inclusive")    buf = Form("Conv. and unconv. #gamma, no ID, %s", isoLabel.Data());
         else if (sc == "all_conv")    buf = Form("All #gamma, no ID, %s",          isoLabel.Data());
         else if (sc == "tight_id")    buf = Form("Unconverted #gamma, tight ID, %s", isoLabel.Data());
         else if (sc == "no_iso")      buf = "Unconverted #gamma, no ID, no iso";
