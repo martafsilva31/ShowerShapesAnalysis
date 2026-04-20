@@ -84,8 +84,8 @@ void extract_chi2(
         "$Z \\to \\ell\\ell\\gamma$"};
 
     const int nScen = 3;
-    const char* scenarios[nScen] = {"baseline", "converted", "all_conv"};
-    const char* scenTeX[nScen]   = {"Unconverted", "Converted", "All conv."};
+    const char* scenarios[nScen] = {"unconverted", "converted", "inclusive"};
+    const char* scenTeX[nScen]   = {"Unconverted", "Converted", "Inclusive"};
 
     const int nVar = 3;
     const char* vars[nVar]    = {"reta", "rphi", "weta2"};
