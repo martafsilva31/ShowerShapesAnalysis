@@ -126,7 +126,7 @@ void drawCellMap(TH2D* hIn,
     lat.SetTextSize(0.038);
     lat.SetTextAlign(11);
     lat.DrawLatex(0.03, row1Y, "#bf{#it{ATLAS}} Work in Progress");
-    lat.DrawLatex(0.44, row1Y, chLabel);
+    lat.DrawLatex(0.32, row1Y, chLabel);
     lat.SetTextAlign(31);
     lat.DrawLatex(0.97, row1Y, typeLabel);
 
@@ -134,7 +134,7 @@ void drawCellMap(TH2D* hIn,
     lat.SetTextSize(0.033);
     lat.SetTextAlign(11);
     lat.DrawLatex(0.03, row2Y, "#sqrt{s} = 13.6 TeV");
-    lat.DrawLatex(0.44, row2Y, etaLabel);
+    lat.DrawLatex(0.32, row2Y, etaLabel);
     lat.SetTextSize(0.028);
     lat.SetTextAlign(31);
     lat.DrawLatex(0.97, row2Y, scenLabel);
@@ -143,7 +143,7 @@ void drawCellMap(TH2D* hIn,
     if (ptLabel) {
         lat.SetTextSize(0.033);
         lat.SetTextAlign(11);
-        lat.DrawLatex(0.44, row3Y, ptLabel);
+        lat.DrawLatex(0.32, row3Y, ptLabel);
     }
 }
 
