@@ -41,10 +41,14 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   │   ├── run_closure_test.sh
 │   │   └── run_closure_suite.sh
 │   └── data_mc/               # Data-MC cell-energy reweighting pipeline (current)
-│       ├── config.h           # Shared config: cuts, branches, geometry, formulas
-│       ├── fill_histograms.C  # Two-pass pipeline: accumulate → correct → fill
-│       ├── plot_shower_shapes.C # Shower shape plots: validation, fudge, comparison, per-eta
-│       ├── plot_cell_profiles.C # 7×11 cell heatmaps + correction vector plots
+│       ├── config.h           # Shared config: cuts, branches, geometry, formulas, pT bins
+│       ├── fill_histograms.C  # Two-pass pipeline: accumulate → correct → fill (supports eta/eta_pt binning, loose/tight iso)
+│       ├── plot_shower_shapes.C # Shower shape plots: per-eta + per-pT PDFs
+│       ├── plot_cell_profiles.C # 7×11 cell heatmaps: per-eta + per-pT PDFs
+│       ├── extract_chi2.C     # Chi-squared tables for a single variant
+│       ├── extract_comparison_final.C  # Cross-variant chi2 comparison table
+│       ├── run_layer2_final.sh  # Full pipeline: 4 variants (eta×{loose,tight} + eta_pt×{loose,tight})
+│       ├── run_layer2_comparison.sh  # Legacy: wide vs cellrange comparison (deprecated)
 │       ├── run.sh             # Driver: compile, run fill + plot scripts
 │       └── old/               # Archived previous-iteration scripts
 ├── grid/                      # Grid submission scripts (pathena)
@@ -60,10 +64,17 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   └── mc23e/                 # mc23e_700770_Zeeg.root (13 GB), mc23e_700771_Zmumug.root (23 GB)
 ├── output/                    # gitignored — computed histograms + plots
 │   ├── old/                   # Archived output from previous iteration
-│   └── cell_energy_reweighting_Francisco_method/
-│       └── data24/{channel}/{scenario}/
-│           ├── histograms.root
-│           └── plots/
+│   ├── cell_energy_reweighting_Francisco_method/  # Legacy output (deprecated)
+│   └── Layer_2/               # Current output for Layer 2 cell reweighting
+│       ├── make_compendiums.py  # Generates LaTeX compendium PDFs for all variants
+│       ├── eta_loose/         # eta-only binning, loose isolation
+│       ├── eta_tight/         # eta-only binning, tight isolation
+│       ├── eta_pt_loose/      # eta×pT binning, loose isolation
+│       └── eta_pt_tight/      # eta×pT binning, tight isolation
+│           └── {channel}/{scenario}/
+│               ├── histograms.root
+│               ├── plots/
+│               └── report/chi2_*.tex
 ├── report/                    # Reports and documentation
 │   ├── egam3_problem_report.md            # DAOD_EGAM3 problem analysis
 │   ├── weta2_investigation_summary.md     # w_eta_2 study summary
@@ -190,19 +201,38 @@ Additional shower shapes from the note (not currently computed in scripts but us
 All histograms in `histograms.root` use the following naming pattern:
 - Integrated: `h_{var}_{tag}` (e.g. `h_reta_data_stored`, `h_reta_mc_fudged`)
 - Per-eta bin: `h_{var}_{tag}_eta{NN}` (e.g. `h_reta_data_eta00`, `h_reta_mc_M1_eta07`)
-- Cell profiles (in `cell_profiles/` subdir): `h_frac_{type}_eta{NN}` (e.g. `h_frac_mean_data_eta00`)
+- Per-(eta,pT) bin (eta_pt mode only): `h_{var}_{tag}_eta{NN}_pt{PP}` (e.g. `h_reta_data_eta00_pt02`)
+- Cell profiles (in `cell_profiles/` subdir): `h_frac_{type}_eta{NN}` or `h_frac_{type}_eta{NN}_pt{PP}`
+- Corrections (in `corrections/` subdir): `h_delta_eta{NN}` or `h_delta_eta{NN}_pt{PP}`
 
 Variable names: `reta`, `rphi`, `weta2`. Tags: `data`, `data_stored`, `mc`, `mc_fudged`, `mc_unfudged`, `mc_M1`, `mc_M2`.
 
-`plot_shower_shapes.C` reads per-eta histos and produces:
-- SET A (`branch_*.pdf`): Data (stored) vs MC unfudged vs MC fudged — shows ATLAS fudge factor effect
-- SET B (`rew_*.pdf`): Data (cell) vs MC (cell) vs M1 vs M2 — shows cell reweighting methods
+### Pipeline Variants
 
-`plot_cell_profiles.C` reads `cell_profiles/` subdirectory and produces:
-- `cell_profiles_before.pdf`, `cell_profiles_after_m1.pdf`, `cell_profiles_delta.pdf`
+| Variant | Binning | Isolation | Correction dimensions |
+|---------|---------|-----------|----------------------|
+| `eta_loose` | 14 eta bins | Loose (default) | `[14][1][77]` |
+| `eta_tight` | 14 eta bins | Tight | `[14][1][77]` |
+| `eta_pt_loose` | 14 eta × 6 pT bins | Loose | `[14][6][77]` |
+| `eta_pt_tight` | 14 eta × 6 pT bins | Tight | `[14][6][77]` |
 
-Output base directory: `output/cell_energy_reweighting_Francisco_method/data24/{channel}/{scenario}/`
-(at repo root, **not** inside `scripts/data_mc/`; scripts use relative path `../../output/...`)
+pT bins (GeV): [10, 15, 20, 25, 30, 40, 1000]. Defined in `config.h` as `kPtLimits`.
+
+`plot_shower_shapes.C(channel, scenario, baseDir, binning="eta", isolation="loose")` produces:
+- `rew_{reta,rphi,weta2}.pdf` — per-eta shower shape comparison (Data, MC, M1, M2)
+- `rew_integrated.pdf` — integrated (all eta combined)
+- `computed_vs_stored.pdf`, `computed_vs_stored_eta.pdf` — cell-computed vs branch values
+- `fudge_factors.pdf`, `fudge_factors_eta.pdf` — fudge factor comparison
+- When `binning="eta_pt"`: `rew_{var}_pt{PP}.pdf` — per-pT shower shape comparison
+
+`plot_cell_profiles.C(channel, scenario, baseDir, binning="eta", isolation="loose")` produces:
+- `cell_{data,mc,mc_m1,mc_m2}.pdf` — 7×11 cell heatmaps per eta
+- `cell_{shift,stretch}.pdf` — correction vector maps per eta
+- When `binning="eta_pt"`: `cell_{type}_pt{PP}.pdf` — per-pT cell heatmaps
+
+Output base directory: `output/Layer_2/{variant}/{channel}/{scenario}/`
+where `variant` is one of `eta_loose`, `eta_tight`, `eta_pt_loose`, `eta_pt_tight`.
+(at repo root, **not** inside `scripts/data_mc/`; scripts use relative path `../../output/Layer_2/...`)
 
 ---
 

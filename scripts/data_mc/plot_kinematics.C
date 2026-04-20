@@ -82,6 +82,10 @@ void drawKinPanel(TH1D* hData, TH1D* hMC, TH1D* hMCnosf,
         hMCnosf->SetLineColor(kBlue + 1);
         hMCnosf->SetLineWidth(2);
         hMCnosf->SetLineStyle(2);
+        TH1D* hMCnosfband = (TH1D*)hMCnosf->Clone("hMCnosfband");
+        hMCnosfband->SetFillColorAlpha(kBlue + 1, 0.15);
+        hMCnosfband->SetLineWidth(0);
+        hMCnosfband->Draw("E2 SAME");
         hMCnosf->Draw("HIST SAME");
     }
     hData->Draw("E P SAME X0");
@@ -93,7 +97,7 @@ void drawKinPanel(TH1D* hData, TH1D* hMC, TH1D* hMCnosf,
     leg->AddEntry(hData, "Data", "ep");
     leg->AddEntry(hMC,   "MC (with SFs)", "lf");
     if (hMCnosf)
-        leg->AddEntry(hMCnosf, "MC (no SFs)", "l");
+        leg->AddEntry(hMCnosf, "MC (no SFs)", "lf");
     leg->Draw();
 
     TLatex lat;
@@ -133,8 +137,10 @@ void drawKinPanel(TH1D* hData, TH1D* hMC, TH1D* hMCnosf,
     ratio->GetXaxis()->SetLabelSize(0.10);
     ratio->SetTitle("");
     ratio->SetStats(0);
-    ratio->SetFillColorAlpha(kRed, 0.15);
-    ratio->Draw("E2");
+    TH1D* ratioband = (TH1D*)ratio->Clone("ratio_kin_band");
+    ratioband->SetFillColorAlpha(kRed, 0.15);
+    ratioband->SetLineWidth(0);
+    ratioband->Draw("E2");
     ratio->Draw("HIST SAME");
 
     if (hMCnosf) {
@@ -143,7 +149,10 @@ void drawKinPanel(TH1D* hData, TH1D* hMC, TH1D* hMCnosf,
         ratio_nosf->SetLineColor(kBlue + 1);
         ratio_nosf->SetLineWidth(2);
         ratio_nosf->SetLineStyle(2);
-        ratio_nosf->SetFillStyle(0);
+        TH1D* ratio_nosf_band = (TH1D*)ratio_nosf->Clone("ratio_kin_nosf_band");
+        ratio_nosf_band->SetFillColorAlpha(kBlue + 1, 0.15);
+        ratio_nosf_band->SetLineWidth(0);
+        ratio_nosf_band->Draw("E2 SAME");
         ratio_nosf->Draw("HIST SAME");
     }
 

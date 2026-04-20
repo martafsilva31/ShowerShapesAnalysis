@@ -4,15 +4,18 @@
 // Creates comparison plots with ratio panels from histograms produced by
 // fill_histograms.C.  Generates PDFs for cell-computed shower shapes:
 //
-//   rew_<var>.pdf  (2–4 curves):
+//   rew_<var>.pdf  (2-4 curves, per-eta):
 //     Data (cell-computed), MC (cell-computed), M1 (flat shift), M2 (Francisco)
-//     Purpose: Show effect of cell reweighting methods.
 //
-// Each PDF has one page per eta bin (14 pages).
+// When binning="eta_pt", also produces per-pT-bin PDFs:
+//   rew_<var>_pt<PP>.pdf  (one PDF per pT bin, 14 eta-bin pages each)
 //
-// Usage:
-//   root -l -b -q 'plot_shower_shapes.C("eegamma", "baseline")'
-//   root -l -b -q 'plot_shower_shapes.C("eegamma", "baseline", "../../output/...")'
+// Parameters:
+//   channel   "eegamma", "mumugamma", or "llgamma"
+//   scenario  conversion scenario
+//   baseDir   output base directory
+//   binning   "eta" or "eta_pt"
+//   isolation "loose" or "tight"
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "config.h"
@@ -47,7 +50,8 @@ void drawPanel(std::vector<TH1D*>& histos,
                const char* chLabel,
                const char* scenLabel,
                TCanvas* c,
-               const char* overrideEtaLabel = nullptr) {
+               const char* overrideEtaLabel = nullptr,
+               const char* ptLabel = nullptr) {
 
     c->Clear();
 
@@ -79,26 +83,27 @@ void drawPanel(std::vector<TH1D*>& histos,
     for (auto& h : histos) ymax = std::max(ymax, h->GetMaximum());
     ymax *= 1.6;
 
-    // Auto-zoom X: find first/last bins with content > 0.5% of peak
+    // Auto-zoom X: find first/last bins with content > 0.5% of peak.
     double peak = 0;
     for (auto& h : histos) peak = std::max(peak, h->GetMaximum());
     double threshold = 0.005 * peak;
-    int firstBin = 1, lastBin = hRef->GetNbinsX();
-    for (int b = 1; b <= hRef->GetNbinsX(); ++b) {
+    int axFirst = hRef->GetXaxis()->GetFirst();
+    int axLast  = hRef->GetXaxis()->GetLast();
+    int firstBin = axFirst, lastBin = axLast;
+    for (int b = axFirst; b <= axLast; ++b) {
         bool hasContent = false;
         for (auto& h : histos)
             if (h->GetBinContent(b) > threshold) { hasContent = true; break; }
         if (hasContent) { firstBin = b; break; }
     }
-    for (int b = hRef->GetNbinsX(); b >= 1; --b) {
+    for (int b = axLast; b >= axFirst; --b) {
         bool hasContent = false;
         for (auto& h : histos)
             if (h->GetBinContent(b) > threshold) { hasContent = true; break; }
         if (hasContent) { lastBin = b; break; }
     }
-    // Add 1-bin padding on each side
-    if (firstBin > 1) firstBin--;
-    if (lastBin < hRef->GetNbinsX()) lastBin++;
+    if (firstBin > axFirst) firstBin--;
+    if (lastBin < axLast)   lastBin++;
     double xlo = hRef->GetXaxis()->GetBinLowEdge(firstBin);
     double xhi = hRef->GetXaxis()->GetBinUpEdge(lastBin);
     hRef->GetXaxis()->SetRangeUser(xlo, xhi);
@@ -113,10 +118,8 @@ void drawPanel(std::vector<TH1D*>& histos,
     hRef->SetTitle("");
     hRef->SetStats(0);
 
-    // Draw with error bars: data as points+errors, MC as filled band + line
     hRef->Draw("E P X0");
     for (size_t i = 1; i < histos.size(); ++i) {
-        // Draw error band (semi-transparent fill)
         TH1D* hBand = (TH1D*)histos[i]->Clone(
             Form("%s_band_%d", histos[i]->GetName(), etaBin));
         hBand->SetFillColorAlpha(colors[i], 0.15);
@@ -124,7 +127,7 @@ void drawPanel(std::vector<TH1D*>& histos,
         hBand->Draw("E2 SAME");
         histos[i]->Draw("HIST SAME");
     }
-    hRef->Draw("E P SAME X0");  // redraw on top
+    hRef->Draw("E P SAME X0");
 
     // Legend
     TLegend* leg = new TLegend(0.52, 0.60, 0.89, 0.89);
@@ -157,6 +160,12 @@ void drawPanel(std::vector<TH1D*>& histos,
             Form("%.2f < |#eta| < %.2f",
                  kEtaLimits[etaBin], kEtaLimits[etaBin + 1]));
 
+    // pT label (drawn below eta label if provided)
+    if (ptLabel) {
+        lat.SetTextSize(0.033);
+        lat.DrawLatex(0.18, 0.55, ptLabel);
+    }
+
     // --- Lower pad: ratio to data ---
     c->cd();
     TPad* pad2 = new TPad("pad2", "", 0, 0.0, 1, 0.30);
@@ -187,7 +196,6 @@ void drawPanel(std::vector<TH1D*>& histos,
         ratio->SetTitle("");
         ratio->SetStats(0);
 
-        // Draw error band + line for ratio
         TH1D* rBand = (TH1D*)ratio->Clone(
             Form("ratio_band_%zu_%d", i, etaBin));
         rBand->SetFillColorAlpha(colors[i], 0.15);
@@ -202,7 +210,6 @@ void drawPanel(std::vector<TH1D*>& histos,
         firstRatio = false;
     }
 
-    // Reference line at 1 (use zoomed range)
     TLine* line = new TLine(xlo, 1.0, xhi, 1.0);
     line->SetLineColor(kGray + 2);
     line->SetLineStyle(2);
@@ -212,16 +219,37 @@ void drawPanel(std::vector<TH1D*>& histos,
 
 
 // ======================================================================
+// Axis-zoom helper
+// ======================================================================
+void computeDataRange(TH1D* href, double& xLo, double& xHi,
+                      double pctLo = 0.005, double pctHi = 0.995) {
+    if (!href) { xLo = 0; xHi = 1; return; }
+    TAxis* ax = href->GetXaxis();
+    if (href->GetEntries() < 10) {
+        xLo = ax->GetXmin(); xHi = ax->GetXmax(); return;
+    }
+    double p[2] = {pctLo, pctHi}, q[2];
+    href->GetQuantiles(2, q, p);
+    int bLo = std::max(1, ax->FindFixBin(q[0]));
+    int bHi = std::min(ax->GetNbins(), ax->FindFixBin(q[1]));
+    xLo = ax->GetBinLowEdge(bLo);
+    xHi = ax->GetBinUpEdge(bHi);
+}
+
+// ======================================================================
 // Main
 // ======================================================================
-int plot_shower_shapes(const char* channel  = "eegamma",
-                       const char* scenario = "baseline",
-                       const char* baseDir  =
-                           "../../output/cell_energy_reweighting_Francisco_method/data24",
-                       int nRebin = 1) {
+int plot_shower_shapes(const char* channel   = "eegamma",
+                       const char* scenario  = "unconverted",
+                       const char* baseDir   = "../../output/Layer_2/eta_loose",
+                       const char* binning   = "eta",
+                       const char* isolation = "loose") {
 
     const char* chLabel   = channelLabel(channel);
-    const char* scenLabel = scenarioLabel(scenario);
+    const char* scenLabel = scenarioLabel(scenario, isolation);
+
+    TString binMode(binning);
+    bool usePtBins = (binMode == "eta_pt");
 
     gStyle->SetOptStat(0);
     gStyle->SetOptTitle(0);
@@ -237,19 +265,13 @@ int plot_shower_shapes(const char* channel  = "eegamma",
         return 1;
     }
 
-    // Compute suffix and rebin helper
-    TString rebinSuffix = "";
-    if (nRebin > 1) {
-        TH1D* hTest = (TH1D*)f->Get("h_reta_data_computed");
-        if (hTest) rebinSuffix = Form("_%dbins", hTest->GetNbinsX() / nRebin);
+    const int nZoomBins = 50;
+    int origNBins = 100;
+    {
+        TH1D* hProbe = (TH1D*)f->Get("h_reta_data_computed");
+        if (hProbe) origNBins = hProbe->GetNbinsX();
     }
-    auto rb = [&](TH1D* h) -> TH1D* {
-        if (!h || nRebin <= 1) return h;
-        // Clone so the file's cached object is not modified (prevents double-rebin)
-        TH1D* hc = (TH1D*)h->Clone(Form("%s_rb", h->GetName()));
-        hc->Rebin(nRebin);
-        return hc;
-    };
+    const int rebinGroups = std::max(1, origNBins / nZoomBins);
 
     TString dir(plotDir);
     if (!dir.EndsWith("/")) dir += "/";
@@ -257,40 +279,47 @@ int plot_shower_shapes(const char* channel  = "eegamma",
 
     TCanvas* c = new TCanvas("c", "Data-MC Comparison", 800, 700);
 
-    // Variable definitions
-    struct VarDef {
-        const char* name; const char* title;
-    };
+    struct VarDef { const char* name; const char* title; };
     VarDef vars[] = {
         {"reta",  "R_{#eta}"},
         {"rphi",  "R_{#phi}"},
         {"weta2", "w_{#eta_{2}}"}
     };
 
+    auto zoomNorm = [&](std::vector<TH1D*>& hv, TH1D* hRef) {
+        for (auto*& h : hv) {
+            h = (TH1D*)h->Clone(Form("%s_zm", h->GetName()));
+            h->Rebin(rebinGroups);
+        }
+        double xLo, xHi;
+        computeDataRange(hRef, xLo, xHi);
+        for (auto* h : hv)
+            h->GetXaxis()->SetRangeUser(xLo, xHi);
+        for (auto* h : hv)
+            if (h->Integral() > 0) h->Scale(1.0 / h->Integral());
+    };
+
     // ================================================================
-    // SET B — Cell-computed: data, mc, mc_M1, mc_M2
+    // SET B -- Cell-computed per-eta: data, mc, mc_M1, mc_M2
     // Produces: rew_reta.pdf, rew_rphi.pdf, rew_weta2.pdf
     // ================================================================
     for (auto& v : vars) {
-        TString pdfPath = dir + Form("rew_%s%s.pdf", v.name, rebinSuffix.Data());
+        TString pdfPath = dir + Form("rew_%s.pdf", v.name);
         std::cout << "Set B " << v.title << ": " << pdfPath << std::endl;
         c->Print(pdfPath + "[");
 
         for (int n = 0; n < kNEtaBins; ++n) {
             TString s = Form("_eta%02d", n);
-            TH1D* hData = rb((TH1D*)f->Get(Form("h_%s_data%s",    v.name, s.Data())));
-            TH1D* hMC   = rb((TH1D*)f->Get(Form("h_%s_mc%s",      v.name, s.Data())));
-            TH1D* hM1   = rb((TH1D*)f->Get(Form("h_%s_mc_M1%s",   v.name, s.Data())));
-            TH1D* hM2   = rb((TH1D*)f->Get(Form("h_%s_mc_M2%s",   v.name, s.Data())));
-
+            TH1D* hData = (TH1D*)f->Get(Form("h_%s_data%s",    v.name, s.Data()));
+            TH1D* hMC   = (TH1D*)f->Get(Form("h_%s_mc%s",      v.name, s.Data()));
+            TH1D* hM1   = (TH1D*)f->Get(Form("h_%s_mc_M1%s",   v.name, s.Data()));
+            TH1D* hM2   = (TH1D*)f->Get(Form("h_%s_mc_M2%s",   v.name, s.Data()));
             if (!hData || !hMC || !hM1 || !hM2) continue;
             if (hData->GetEntries() < 100) continue;
 
-            // Normalise
-            for (auto* h : {hData, hMC, hM1, hM2})
-                if (h->Integral() > 0) h->Scale(1.0 / h->Integral());
+            std::vector<TH1D*> hv = {hData, hMC, hM1, hM2};
+            zoomNorm(hv, hv[0]);
 
-            std::vector<TH1D*> histos = {hData, hMC, hM1, hM2};
             std::vector<TString> labels = {
                 "Data", "Original MC",
                 "MC reweighted (shift only)", "MC reweighted (shift+stretch)"
@@ -298,7 +327,7 @@ int plot_shower_shapes(const char* channel  = "eegamma",
             std::vector<int> colors = {kBlack, kRed, kGreen + 2, kBlue};
             std::vector<int> styles = {1, 1, 1, 1};
 
-            drawPanel(histos, labels, colors, styles,
+            drawPanel(hv, labels, colors, styles,
                       v.title, n, chLabel, scenLabel, c);
             c->Print(pdfPath);
         }
@@ -306,28 +335,73 @@ int plot_shower_shapes(const char* channel  = "eegamma",
     }
 
     // ================================================================
-    // Computed vs Stored — one page per variable (integrated)
-    // Produces: computed_vs_stored.pdf
+    // SET B per-(eta,pT) — only in eta_pt mode
+    // Produces: rew_<var>_pt<PP>.pdf  (one PDF per pT bin, 14 pages)
+    // ================================================================
+    if (usePtBins) {
+        for (int p = 0; p < kNPtBins; ++p) {
+            for (auto& v : vars) {
+                TString pdfPath = dir + Form("rew_%s_pt%02d.pdf", v.name, p);
+                std::cout << "Set B per-pT " << v.title
+                          << " pT bin " << p << ": " << pdfPath << std::endl;
+                c->Print(pdfPath + "[");
+
+                for (int n = 0; n < kNEtaBins; ++n) {
+                    TString s = Form("_eta%02d_pt%02d", n, p);
+                    TH1D* hData = (TH1D*)f->Get(Form("h_%s_data%s",  v.name, s.Data()));
+                    TH1D* hMC   = (TH1D*)f->Get(Form("h_%s_mc%s",    v.name, s.Data()));
+                    TH1D* hM1   = (TH1D*)f->Get(Form("h_%s_mc_M1%s", v.name, s.Data()));
+                    TH1D* hM2   = (TH1D*)f->Get(Form("h_%s_mc_M2%s", v.name, s.Data()));
+                    if (!hData || !hMC || !hM1 || !hM2) continue;
+                    if (hData->GetEntries() < 50) continue;
+
+                    std::vector<TH1D*> hv = {hData, hMC, hM1, hM2};
+                    zoomNorm(hv, hv[0]);
+
+                    std::vector<TString> labels = {
+                        "Data", "Original MC",
+                        "MC reweighted (shift only)", "MC reweighted (shift+stretch)"
+                    };
+                    std::vector<int> colors = {kBlack, kRed, kGreen + 2, kBlue};
+                    std::vector<int> styles = {1, 1, 1, 1};
+
+                    drawPanel(hv, labels, colors, styles,
+                              v.title, n, chLabel, scenLabel, c,
+                              nullptr, ptBinLabel(p));
+                    c->Print(pdfPath);
+                }
+                c->Print(pdfPath + "]");
+            }
+        }
+    }
+
+    // ================================================================
+    // SET B integrated -- Data, MC, M1, M2 (all eta combined)
+    // Produces: rew_integrated.pdf  (3 pages: reta, rphi, weta2)
     // ================================================================
     {
-        TString pdfPath = dir + "computed_vs_stored" + rebinSuffix + ".pdf";
-        std::cout << "Computed vs stored: " << pdfPath << std::endl;
+        TString pdfPath = dir + "rew_integrated.pdf";
+        std::cout << "Set B integrated: " << pdfPath << std::endl;
         c->Print(pdfPath + "[");
 
         for (auto& v : vars) {
-            TH1D* hComp = rb((TH1D*)f->Get(Form("h_%s_data_computed", v.name)));
-            TH1D* hStor = rb((TH1D*)f->Get(Form("h_%s_data_stored",   v.name)));
-            if (!hComp || !hStor) continue;
+            TH1D* hData = (TH1D*)f->Get(Form("h_%s_data_computed", v.name));
+            TH1D* hMC   = (TH1D*)f->Get(Form("h_%s_mc_computed",  v.name));
+            TH1D* hM1   = (TH1D*)f->Get(Form("h_%s_mc_M1",        v.name));
+            TH1D* hM2   = (TH1D*)f->Get(Form("h_%s_mc_M2",        v.name));
+            if (!hData || !hMC || !hM1 || !hM2) continue;
 
-            for (auto* h : {hComp, hStor})
-                if (h->Integral() > 0) h->Scale(1.0 / h->Integral());
+            std::vector<TH1D*> hv = {hData, hMC, hM1, hM2};
+            zoomNorm(hv, hv[0]);
 
-            std::vector<TH1D*> histos = {hComp, hStor};
-            std::vector<TString> labels = {"Data (computed)", "Data (stored)"};
-            std::vector<int> colors = {kBlack, kRed};
-            std::vector<int> styles = {1, 1};
+            std::vector<TString> labels = {
+                "Data", "Original MC",
+                "MC reweighted (shift only)", "MC reweighted (shift+stretch)"
+            };
+            std::vector<int> colors = {kBlack, kRed, kGreen + 2, kBlue};
+            std::vector<int> styles = {1, 1, 1, 1};
 
-            drawPanel(histos, labels, colors, styles,
+            drawPanel(hv, labels, colors, styles,
                       v.title, 0, chLabel, scenLabel, c, "Inclusive");
             c->Print(pdfPath);
         }
@@ -335,33 +409,127 @@ int plot_shower_shapes(const char* channel  = "eegamma",
     }
 
     // ================================================================
-    // Fudge factors — one page per variable (integrated)
-    // Produces: fudge_factors.pdf
+    // Computed vs Stored -- integrated
+    // Produces: computed_vs_stored.pdf
     // ================================================================
     {
-        TString pdfPath = dir + "fudge_factors" + rebinSuffix + ".pdf";
-        std::cout << "Fudge factors: " << pdfPath << std::endl;
+        TString pdfPath = dir + "computed_vs_stored.pdf";
+        std::cout << "Computed vs stored (integrated): " << pdfPath << std::endl;
         c->Print(pdfPath + "[");
 
         for (auto& v : vars) {
-            TH1D* hStor = rb((TH1D*)f->Get(Form("h_%s_data_stored",   v.name)));
-            TH1D* hFud  = rb((TH1D*)f->Get(Form("h_%s_mc_fudged",     v.name)));
-            TH1D* hUnf  = rb((TH1D*)f->Get(Form("h_%s_mc_unfudged",   v.name)));
+            TH1D* hComp = (TH1D*)f->Get(Form("h_%s_data_computed", v.name));
+            TH1D* hStor = (TH1D*)f->Get(Form("h_%s_data_stored",   v.name));
+            if (!hComp || !hStor) continue;
+
+            std::vector<TH1D*> hv = {hComp, hStor};
+            zoomNorm(hv, hv[0]);
+
+            std::vector<TString> labels = {"Data (computed)", "Data (stored)"};
+            std::vector<int> colors = {kBlack, kRed};
+            std::vector<int> styles = {1, 1};
+
+            drawPanel(hv, labels, colors, styles,
+                      v.title, 0, chLabel, scenLabel, c, "Inclusive");
+            c->Print(pdfPath);
+        }
+        c->Print(pdfPath + "]");
+    }
+
+    // ================================================================
+    // Computed vs Stored -- per-eta
+    // Produces: computed_vs_stored_eta.pdf
+    // ================================================================
+    {
+        TString pdfPath = dir + "computed_vs_stored_eta.pdf";
+        std::cout << "Computed vs stored (per-eta): " << pdfPath << std::endl;
+        c->Print(pdfPath + "[");
+
+        for (auto& v : vars) {
+            for (int n = 0; n < kNEtaBins; ++n) {
+                TString s = Form("_eta%02d", n);
+                TH1D* hComp = (TH1D*)f->Get(Form("h_%s_data%s",        v.name, s.Data()));
+                TH1D* hStor = (TH1D*)f->Get(Form("h_%s_data_stored%s", v.name, s.Data()));
+                if (!hComp || !hStor) continue;
+                if (hComp->GetEntries() < 100) continue;
+
+                std::vector<TH1D*> hv = {hComp, hStor};
+                zoomNorm(hv, hv[0]);
+
+                std::vector<TString> labels = {"Data (computed)", "Data (stored)"};
+                std::vector<int> colors = {kBlack, kRed};
+                std::vector<int> styles = {1, 1};
+
+                drawPanel(hv, labels, colors, styles,
+                          v.title, n, chLabel, scenLabel, c);
+                c->Print(pdfPath);
+            }
+        }
+        c->Print(pdfPath + "]");
+    }
+
+    // ================================================================
+    // Fudge factors -- integrated
+    // Produces: fudge_factors.pdf
+    // ================================================================
+    {
+        TString pdfPath = dir + "fudge_factors.pdf";
+        std::cout << "Fudge factors (integrated): " << pdfPath << std::endl;
+        c->Print(pdfPath + "[");
+
+        for (auto& v : vars) {
+            TH1D* hStor = (TH1D*)f->Get(Form("h_%s_data_stored",   v.name));
+            TH1D* hFud  = (TH1D*)f->Get(Form("h_%s_mc_fudged",     v.name));
+            TH1D* hUnf  = (TH1D*)f->Get(Form("h_%s_mc_unfudged",   v.name));
             if (!hStor || !hFud || !hUnf) continue;
 
-            for (auto* h : {hStor, hFud, hUnf})
-                if (h->Integral() > 0) h->Scale(1.0 / h->Integral());
+            std::vector<TH1D*> hv = {hStor, hFud, hUnf};
+            zoomNorm(hv, hv[0]);
 
-            std::vector<TH1D*> histos = {hStor, hFud, hUnf};
             std::vector<TString> labels = {
                 "Data", "MC (fudged)", "MC (unfudged)"
             };
             std::vector<int> colors = {kBlack, kBlue, kRed};
             std::vector<int> styles = {1, 1, 2};
 
-            drawPanel(histos, labels, colors, styles,
+            drawPanel(hv, labels, colors, styles,
                       v.title, 0, chLabel, scenLabel, c, "Inclusive");
             c->Print(pdfPath);
+        }
+        c->Print(pdfPath + "]");
+    }
+
+    // ================================================================
+    // Fudge factors -- per-eta
+    // Produces: fudge_factors_eta.pdf
+    // ================================================================
+    {
+        TString pdfPath = dir + "fudge_factors_eta.pdf";
+        std::cout << "Fudge factors (per-eta): " << pdfPath << std::endl;
+        c->Print(pdfPath + "[");
+
+        for (auto& v : vars) {
+            for (int n = 0; n < kNEtaBins; ++n) {
+                TString s = Form("_eta%02d", n);
+                TH1D* hStor = (TH1D*)f->Get(Form("h_%s_data_stored%s",  v.name, s.Data()));
+                TH1D* hFud  = (TH1D*)f->Get(Form("h_%s_mc_fudged%s",   v.name, s.Data()));
+                TH1D* hUnf  = (TH1D*)f->Get(Form("h_%s_mc_unfudged%s", v.name, s.Data()));
+                if (!hStor || !hFud || !hUnf) continue;
+                if (hStor->GetEntries() < 100) continue;
+
+                std::vector<TH1D*> hv = {hStor, hFud, hUnf};
+                zoomNorm(hv, hv[0]);
+
+                std::vector<TString> labels = {
+                    "Data", "MC (fudged)", "MC (unfudged)"
+                };
+                std::vector<int> colors = {kBlack, kBlue, kRed};
+                std::vector<int> styles = {1, 1, 2};
+
+                drawPanel(hv, labels, colors, styles,
+                          v.title, n, chLabel, scenLabel, c);
+                c->Print(pdfPath);
+            }
         }
         c->Print(pdfPath + "]");
     }

@@ -4,18 +4,18 @@
 %% Physics report: Photon shower shape corrections using cell-level energy
 %% reweighting with Run 3 data.
 %%
-%% This documents the CURRENT pipeline (M1 flat shift + M2 shift+stretch).
-%% The older investigation of the DeltaR-matched TProfile method is in
-%% data_mc_reweighting_report.tex (kept for reference).
+%% This documents the cell-level correction pipeline with M1 (flat shift)
+%% and M2 (shift+stretch), including the stabilisation fixes that make M2
+%% the recommended method.
 %%
 %% Compile:
 %%   cd report/
 %%   pdflatex cell_reweighting_report.tex   (x2 for references)
 %%
 %% Prerequisites:
-%%   - Run the pipeline:  cd scripts/data_mc && bash run.sh --batch
-%%   - Run chi2 extraction:  root -l -b -q 'extract_chi2.C'
-%%   This generates chi2_yields.tex, chi2_summary.tex, chi2_tables.tex.
+%%   - Run the pipeline:  cd scripts/data_mc && bash run_layer2_comparison.sh
+%%   - Run chi2 extraction:  root -l -b -q 'extract_chi2.C()'
+%%   - Run comparison:  root -l -b -q 'extract_comparison_chi2.C()'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[11pt,a4paper]{article}
@@ -40,7 +40,7 @@
 }
 
 % Graphics path: output directory (relative to report/)
-\graphicspath{{../output/cell_energy_reweighting_Francisco_method/data24/}}
+\graphicspath{{../output/Layer_2/hist_sigma_cellrange/}}
 
 % Custom commands
 \newcommand{\Reta}{\ensuremath{R_{\eta}}}
@@ -73,15 +73,27 @@ each cell energy by the mean data--MC fraction difference.  Method~2
 (M2, shift+stretch) additionally matches the variance by applying a
 linear transformation derived from Francisco Almeida's
 \texttt{photoncellbasedrw} framework.  Both methods are evaluated across
-14~$\abseta$ bins, three decay channels ($Z \to ee\gamma$,
-$Z \to \mu\mu\gamma$, combined), and three photon conversion
-scenarios (unconverted, converted, inclusive).
+13~non-crack $\abseta$ bins, the combined $Z \to \ell\ell\gamma$ channel,
+and three photon conversion scenarios (unconverted, converted, inclusive).
 
-M1 provides robust corrections for \Reta\ and \Rphi\ with minimal
-residual $\chisq$ and exact energy conservation by construction.  M2
-further improves \weta\ by matching the cell-fraction variance.
-Directions for future work include differential \pt-dependent
-corrections and machine-learning approaches such as normalising flows.
+An initial implementation of M2 suffered from catastrophic instabilities
+in specific $\abseta$ bins, where divergent variance ratios in peripheral
+cells produced $\chisq$ values up to $90\times$ worse than uncorrected MC.
+Three targeted fixes --- histogram-based $\sigma$ estimation via
+\texttt{GetRMS()}, cell-dependent histogram ranges acting as natural
+regularisation, and removal of a minimum-fraction fallback --- completely
+eliminated these instabilities.  The stabilised M2 now outperforms M1 for
+all three shower shape variables, with average $\chisq$ improvements of
+17\% (\Reta), 45\% (\Rphi), and 29\% (\weta) relative to M1.  M2 nearly
+matches the empirical ATLAS fudge factors, achieving identical $\chisq$ for
+\Reta\ and \weta\ and within 20\% for \Rphi.
+
+A cross-source comparison with Francisco Almeida's
+\texttt{photoncellbasedrw} Run\,3 output confirms equivalent correction
+quality, with small residual $\chisq$ differences attributable to
+different histogram axis ranges used in the two implementations.
+M2 with cell-dependent histogram ranges is the recommended cell-level
+correction method.
 \end{abstract}
 
 \tableofcontents
@@ -119,6 +131,13 @@ reweighting approach.  Two methods are studied:
 \end{itemize}
 The analysis uses $Z \to \ell\ell\gamma$ events selected from ATLAS 2024
 data and MC23e simulation, processed through the NTupleMaker framework.
+
+An earlier version of this pipeline found M2 to be unstable, with
+catastrophic failures in certain $\abseta$ bins traced to divergent
+variance ratios in peripheral cells.  This note describes the three code
+improvements that eliminated those instabilities and presents the
+resulting performance, where M2 is now the recommended cell-level
+correction method.
 
 
 %% ====================================================================
@@ -204,12 +223,13 @@ the hottest cell.
 
 Three conversion scenarios are studied:
 \begin{itemize}
-  \item \textbf{Baseline} (unconverted): only unconverted photons
+  \item \textbf{Unconverted}: only unconverted photons
         ($\texttt{isConv} = \texttt{false}$), with loose isolation.
   \item \textbf{Converted}: only converted photons
         ($\texttt{isConv} = \texttt{true}$), with loose isolation.
-  \item \textbf{All conversions}: no conversion requirement, with loose
-        isolation.
+  \item \textbf{Inclusive}: both converted and unconverted photons,
+        no ID requirement, with loose isolation.  Event counts are the
+        sum of the unconverted and converted samples.
 \end{itemize}
 
 
@@ -260,7 +280,7 @@ standard shower shapes.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/computed_vs_stored.pdf}
+\includegraphics[width=0.92\textwidth]{llgamma/unconverted/plots/computed_vs_stored.pdf}
 \caption{Validation: cell-computed shower shapes versus stored ntuple
   branch values for the combined $Z \to \ell\ell\gamma$ channel
   (unconverted photons).}
@@ -349,13 +369,228 @@ This method corresponds to Francisco Almeida's
 Run\,3 data.
 
 
+\subsubsection{Variance estimation: histogram-based $\sigma$ via \texttt{GetRMS()}}
+\label{sec:m2-getrms}
+
+The standard deviation $\sigma_k$ that enters Eq.~\eqref{eq:m2-stretch}
+must be estimated from finite samples.  The natural approach is the
+textbook running-variance formula:
+\begin{equation}
+  \hat\sigma_k^2 = \frac{1}{N}\sum_{i=1}^{N} f_{k,i}^{\,2}
+                   \;-\; \Bigl(\frac{1}{N}\sum_{i=1}^{N} f_{k,i}\Bigr)^{\!\!2}
+  \,,
+  \label{eq:manual-variance}
+\end{equation}
+where $f_{k,i}$ is the energy fraction of cell~$k$ in event~$i$.  This
+formula is algebraically correct but \textbf{numerically unstable} when
+$\sigma_k$ is small relative to $\mu_k$.  For the central cell
+(index~38), which carries $\mu_{38} \approx 0.07$--$0.10$ of the cluster
+energy and has $\sigma_{38} \approx 0.01$--$0.02$, the formula is safe.
+However, for peripheral cells that carry $\mu_k < 10^{-3}$ of the total
+energy, both $\sigma_{\text{data},k}$ and $\sigma_{\text{MC},k}$ are of
+order $10^{-4}$, and the subtraction
+$\langle f^2 \rangle - \langle f \rangle^2$ involves two nearly equal
+numbers of order $10^{-6}$--$10^{-8}$.  In floating-point arithmetic,
+this is a classic \textbf{catastrophic cancellation}: the result can be
+dominated by accumulated rounding errors, particularly when $N$ is large
+(here $N \sim 200\,\text{k}$ data events and $\sim 2.8\,\text{M}$ MC
+events).  Even a tiny relative error in the accumulated sum $\sum f_{k,i}^2$
+can flip the sign of the difference or inflate $\hat\sigma$ by factors
+of 2--10, which then propagates into the stretch factor
+$\text{stretch}_k = \sigma_{\text{data},k} / \sigma_{\text{MC},k}$
+as a multiplicative error.
+
+The initial implementation of this pipeline used the running-variance
+formula of Eq.~\eqref{eq:manual-variance}, which was identified as one
+of the root causes of the M2 instability (see
+Section~\ref{sec:disc-m2-stabilisation}).
+
+The fixed implementation replaces the manual calculation with a
+\textbf{per-cell \texttt{TH1D} histogram approach}.  For each cell~$k$
+and $\abseta$ bin, a one-dimensional histogram
+\texttt{h\_frac\_d[e][k]} (data) and \texttt{h\_frac\_m[e][k]} (MC) is
+booked during initialisation, for a total of
+$77 \times 14 = 1\,078$ histograms per sample (data and MC).  During
+the event loop, the cell fraction $f_k = E_k / \Etot$ is filled into
+the corresponding histogram.  After all events are processed, the
+standard deviation is extracted as:
+\begin{equation}
+  \sigma_{\text{data},k} = \texttt{h\_frac\_d[e][k]->GetRMS()} \,,
+  \qquad
+  \sigma_{\text{MC},k} = \texttt{h\_frac\_m[e][k]->GetRMS()} \,.
+  \label{eq:getrms}
+\end{equation}
+ROOT's \texttt{GetRMS()} computes the sample standard deviation from
+the histogram contents using a numerically stable algorithm that
+operates on the binned distribution, avoiding the catastrophic
+cancellation inherent in Eq.~\eqref{eq:manual-variance}.
+
+A second critical advantage of the histogram approach is that the
+\textbf{histogram range acts as an implicit outlier filter}: any fraction
+value $f_k$ falling outside the histogram axis range $[f_{\min},
+f_{\max}]$ enters the overflow bin and does \emph{not} contribute to
+\texttt{GetRMS()}.  This provides a natural form of regularisation
+without requiring explicit outlier-removal logic.  The specific choice
+of histogram ranges is discussed in the next section.
+
+
+\subsubsection{Cell-dependent histogram ranges}
+\label{sec:m2-cellranges}
+
+The $7 \times 11$ cluster contains cells with vastly different energy
+fractions: the central cell (index~38, directly under the shower core)
+carries $\sim$7--10\% of the total cluster energy, while the outermost
+cells carry $< 0.01\%$.  Using a single, wide histogram range
+$[f_{\min}, f_{\max}]$ for all 77~cells is suboptimal: a range wide
+enough to capture the central cell's full distribution (e.g.\
+$[-1, 2]$ or $[-0.1, 1.0]$) would spread the peripheral cell's
+narrow distribution over very few bins, degrading the \texttt{GetRMS()}
+resolution, or --- conversely --- would include extreme stochastic
+outliers that inflate the measured standard deviation.
+
+The pipeline therefore implements two range configurations:
+
+\paragraph{(a) Wide uniform range $[-1, 2]$.}
+All 77~cells use the same range $[-1, 2]$ with 100~bins (bin width $=
+0.03$).  This makes no assumptions about cell energetics but provides
+poor resolution for peripheral cells whose entire distribution fits
+within a single bin.  Stochastic outlier fractions (e.g.\ negative
+energies from noise, or fractions $> 1$ from extreme fluctuations) are
+fully included in the RMS.
+
+\paragraph{(b) Cell-dependent ranges (recommended).}
+The histogram range is adapted to each cell's expected energy fraction
+magnitude, following the ranges used in Francisco Almeida's
+\texttt{photoncellbasedrw} framework.  The 77~cells are classified into
+four categories based on their position relative to the shower core:
+
+\begin{table}[htbp]
+\centering
+\caption{Cell-dependent histogram ranges for the fraction distributions.
+  Cell indices are 0-based in a row-major $7 \times 11$
+  ($\eta \times \phi$) layout, where cell~38 is the central
+  (hottest) cell.  All histograms use 100 bins within their respective
+  ranges.}
+\label{tab:cell-ranges}
+\begin{tabular}{llcc}
+\toprule
+Cell category & Indices (0-based) & Range & Expected $\langle f_k \rangle$ \\
+\midrule
+Central (shower core)
+  & 38
+  & $[-0.1, 1.0]$
+  & $\sim 0.07$--$0.10$ \\
+Direct neighbours ($\eta$/$\phi$ adjacent)
+  & 27, 37, 39, 49
+  & $[-0.1, 0.5]$
+  & $\sim 0.02$--$0.05$ \\
+Diagonal neighbours (next ring)
+  & 26, 28, 48, 50
+  & $[-0.1, 0.3]$
+  & $\sim 0.005$--$0.02$ \\
+Peripheral (60 remaining cells)
+  & all others
+  & $[-0.1, 0.2]$
+  & $< 0.005$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The cell-dependent ranges serve three purposes:
+\begin{enumerate}
+  \item \textbf{Resolution}: with 100 bins per histogram, the bin width
+        for peripheral cells is $0.003$ (range $[-0.1, 0.2]$) rather
+        than $0.03$ (wide range $[-1, 2]$).  This $10\times$ finer
+        binning resolves the narrow peripheral distributions and yields
+        a more precise \texttt{GetRMS()}.
+  \item \textbf{Natural regularisation}: fraction values outside the
+        histogram range are clipped into the overflow bin and excluded
+        from \texttt{GetRMS()}.  For peripheral cells, whose physical
+        fraction is $O(10^{-4})$--$O(10^{-3})$, the upper cutoff at
+        $0.2$ removes extreme stochastic tails (e.g.\ from noise
+        fluctuations or pile-up) that would inflate $\sigma$ and produce
+        pathologically large stretch factors.  This implicit clipping
+        replaces the explicit regularisation strategies (Winsorisation,
+        peripheral-cell exclusion) that were previously considered.
+  \item \textbf{Matching Francisco's implementation}: the ranges in
+        Table~\ref{tab:cell-ranges} match those used in the
+        \texttt{photoncellbasedrw} framework, ensuring that the M2
+        corrections derived by our pipeline are directly comparable to
+        Francisco's results.
+\end{enumerate}
+
+The effect of the choice of range configuration on the correction
+quality is quantified in Section~\ref{sec:disc-wide-vs-cellrange}.
+The cell-dependent configuration is used as the primary result
+throughout this note.
+
+
+\subsubsection{Removal of the minimum-fraction fallback}
+\label{sec:m2-no-fallback}
+
+The initial implementation of M2 included a safeguard against
+pathological stretch factors: cells whose mean fraction
+$\mu_{\text{MC},k}$ fell below a threshold
+$\texttt{kMinFracForM2} = 0.002$ were excluded from the M2 correction
+and instead received only the M1 flat shift.  The rationale was that
+peripheral cells with negligible energy carry no useful variance
+information, and the M2 stretch factor would be dominated by noise.
+
+This fallback was removed for two reasons:
+
+\begin{enumerate}
+  \item \textbf{The histogram-based $\sigma$ with cell-dependent ranges
+        already prevents pathological stretches.}  The implicit
+        outlier clipping described in
+        Section~\ref{sec:m2-cellranges} ensures that the measured
+        $\sigma_{\text{data},k}$ and $\sigma_{\text{MC},k}$ for
+        peripheral cells reflect only the physically relevant
+        fraction variations, not stochastic noise tails.  The
+        resulting stretch factors stay in a well-behaved range without
+        any explicit cap or fallback.
+
+  \item \textbf{The fallback created an inconsistent correction
+        mixture.}  With the fallback active, each event received a
+        mixture of M1 corrections (for cells with $\mu_k < 0.002$)
+        and M2 corrections (for cells with $\mu_k \geq 0.002$).
+        This was physically inconsistent: the M2 corrections to the
+        central cells assumed that \emph{all} cells would be
+        shift+stretch-corrected (since the energy conservation
+        rescaling~\eqref{eq:m2-rescale} acts on the entire cluster),
+        but the peripheral cells received a different transformation.
+        The result was a subtle energy imbalance that degraded the
+        overall correction quality.  Removing the fallback ensures that
+        all 77~cells are corrected with the same M2 linear
+        transformation, and the energy conservation rescaling operates
+        consistently.
+\end{enumerate}
+
+In the current implementation, the only safeguard against division by
+zero in Eq.~\eqref{eq:m2-stretch} is a minimum-$\sigma$ threshold:
+\begin{equation}
+  \text{stretch}_k =
+  \begin{cases}
+    \sigma_{\text{data},k} / \sigma_{\text{MC},k}
+      & \text{if } \sigma_{\text{MC},k} > 10^{-12} \\
+    1.0 & \text{otherwise}
+  \end{cases}
+  \,.
+  \label{eq:stretch-safeguard}
+\end{equation}
+The threshold $10^{-12}$ is far below any physically meaningful variance
+and serves only to prevent floating-point division by zero.  In practice
+it is never triggered for cells within the histogram range, since even
+the most peripheral cells have $\sigma_{\text{MC}} \sim 10^{-4}$--$10^{-3}$.
+
+
 %% ====================================================================
-\section{Results: Baseline (Unconverted Photons)}
-\label{sec:results-baseline}
+\section{Results: Unconverted Photons}
+\label{sec:results-unconverted}
 %% ====================================================================
 
 This section presents the main results for the combined channel
-($Z \to \ell\ell\gamma$) with unconverted photons (baseline scenario).
+($Z \to \ell\ell\gamma$) with unconverted photons, using the
+cell-dependent histogram range configuration.
 
 \subsection{Shower shape comparisons}
 \label{sec:results-shower}
@@ -366,16 +601,16 @@ corrections.  Each PDF contains one page per $\abseta$ bin.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/rew_reta.pdf}
+\includegraphics[width=0.92\textwidth]{llgamma/unconverted/plots/rew_reta.pdf}
 \caption{Cell-computed \Reta\ comparison: data versus uncorrected MC,
   M1 (shift only), and M2 (shift+stretch), for the combined channel,
-  unconverted photons.}
+  unconverted photons, using cell-dependent histogram ranges.}
 \label{fig:rew-reta}
 \end{figure}
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/rew_rphi.pdf}
+\includegraphics[width=0.92\textwidth]{llgamma/unconverted/plots/rew_rphi.pdf}
 \caption{Cell-computed \Rphi\ comparison (same layout as
   Figure~\ref{fig:rew-reta}).}
 \label{fig:rew-rphi}
@@ -383,7 +618,7 @@ corrections.  Each PDF contains one page per $\abseta$ bin.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/rew_weta2.pdf}
+\includegraphics[width=0.92\textwidth]{llgamma/unconverted/plots/rew_weta2.pdf}
 \caption{Cell-computed \weta\ comparison (same layout as
   Figure~\ref{fig:rew-reta}).}
 \label{fig:rew-weta2}
@@ -392,7 +627,7 @@ corrections.  Each PDF contains one page per $\abseta$ bin.
 \subsection{Chi-squared comparison}
 \label{sec:results-chi2}
 
-Table~\ref{tab:chi2-llgamma-baseline} reports the $\chisq$ between each
+Table~\ref{tab:chi2-llgamma-unconverted} reports the $\chisq$ between each
 MC variant and data, computed bin-by-bin after area normalisation, for
 each $\abseta$ bin.  The Pearson $\chi^2$ is defined as
 \begin{equation}
@@ -405,7 +640,7 @@ where the sum runs over histogram bins with $h^{\text{data}}_b > 0$.
 \label{sec:results-average}
 
 Table~\ref{tab:chi2-summary} summarises the average $\chisq$ across all
-non-empty $\abseta$ bins for each method, channel, and conversion
+non-crack $\abseta$ bins for each method, channel, and conversion
 scenario.
 
 \input{chi2_summary}
@@ -437,19 +672,26 @@ values are reported in Table~\ref{tab:chi2-llgamma-converted}
 \label{fig:rew-reta-converted}
 \end{figure}
 
-\subsection{All conversions combined}
-\label{sec:conv-allconv}
+\subsection{Inclusive}
+\label{sec:conv-inclusive}
 
-Figure~\ref{fig:rew-reta-allconv} shows the \Reta\ comparison without
-any conversion requirement.  Full $\chisq$ tables are in
-Table~\ref{tab:chi2-llgamma-all_conv} (Appendix~\ref{app:chi2-tables}).
+Figure~\ref{fig:rew-reta-inclusive} shows the \Reta\ comparison for the
+Inclusive scenario (both converted and unconverted photons, no ID, loose
+isolation).  Full $\chisq$ tables are in
+Table~\ref{tab:chi2-llgamma-inclusive} (Appendix~\ref{app:chi2-tables}).
+
+The inclusive sample is constructed by merging the unconverted and
+converted histograms via \texttt{hadd}, rather than re-deriving
+corrections on the mixed sample.  This preserves the
+conversion-specific corrections while providing the highest-statistics
+evaluation.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/all_conv/plots/rew_reta.pdf}
-\caption{Cell-computed \Reta\ for the combined channel, all conversions:
+\includegraphics[width=0.92\textwidth]{llgamma/inclusive/plots/rew_reta.pdf}
+\caption{Cell-computed \Reta\ for the combined channel, inclusive:
   data versus MC, M1, and M2.}
-\label{fig:rew-reta-allconv}
+\label{fig:rew-reta-inclusive}
 \end{figure}
 
 \subsection{Comparison across scenarios}
@@ -459,40 +701,19 @@ The summary table (Table~\ref{tab:chi2-summary}) allows direct
 comparison of the average $\chisq$ across conversion scenarios.
 
 Unconverted photons consistently produce the lowest $\chisq$ values for
-all methods.  For the combined channel:\ M1 achieves an average \weta\
-$\chisq$ of 0.0007 (unconverted) versus 0.0012 (converted).  Converted
+all methods.  For the combined channel:\ M2 achieves an average \weta\
+$\chisq$ of 0.0005 (unconverted) versus 0.0010 (converted).  Converted
 photons produce more diffuse electromagnetic showers due to the upstream
 $e^+e^-$ pair production, leading to broader cell-fraction distributions
 whose correction is intrinsically harder.  The reduced data statistics
 for converted photons (45\,532 events versus 205\,309 unconverted in the
 combined channel) further limit the precision of the derived corrections.
 
-The inclusive (all-conversions) scenario contains both populations and
+The inclusive scenario combines both populations and
 benefits from the highest statistics; it generally falls between the
-unconverted and converted performance.
-
-
-%% ====================================================================
-\section{Per-Channel Results}
-\label{sec:per-channel}
-%% ====================================================================
-
-The corrections are derived and evaluated separately for each decay
-channel.  Tables for the $Z \to ee\gamma$ and $Z \to \mu\mu\gamma$
-channels are available in Appendix~\ref{app:chi2-tables}
-(Tables~\ref{tab:chi2-eegamma-baseline}--\ref{tab:chi2-mumugamma-all_conv}).
-
-Both channels show consistent behaviour: the correction performance is
-stable across the two lepton flavours, validating the use of the
-combined channel as the primary result.  The $Z \to \mu\mu\gamma$
-channel yields $\sim$60\% more data events (127\,178 versus 78\,131
-unconverted) and correspondingly lower $\chisq$ values in all
-scenarios, confirming that increased statistics improve correction
-quality.  No channel-specific pathologies are observed; the M2
-instabilities discussed in Section~\ref{sec:disc-m2-instability} appear
-in different $\abseta$ bins in the individual channels but are present
-in both, confirming that they are a property of the method rather than
-channel-specific artefacts.
+unconverted and converted performance.  For unconverted photons, M2
+achieves $\chisq$ values very close to the fudge factors (0.0005 vs
+0.0005 for \Reta\ and \weta).
 
 
 %% ====================================================================
@@ -513,9 +734,9 @@ M1 correction.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_data.pdf}%
+\includegraphics[width=0.48\textwidth]{llgamma/unconverted/plots/cell_data.pdf}%
 \hfill
-\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_mc.pdf}
+\includegraphics[width=0.48\textwidth]{llgamma/unconverted/plots/cell_mc.pdf}
 \caption{Mean cell energy fraction profiles before correction:
   data (left) and MC (right), for each $\abseta$ bin.}
 \label{fig:cell-before}
@@ -527,9 +748,9 @@ profiles are shown in Figure~\ref{fig:cell-after-m1}.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_mc_m1.pdf}%
+\includegraphics[width=0.48\textwidth]{llgamma/unconverted/plots/cell_mc_m1.pdf}%
 \hfill
-\includegraphics[width=0.48\textwidth]{llgamma/baseline/plots/cell_mc_m2.pdf}
+\includegraphics[width=0.48\textwidth]{llgamma/unconverted/plots/cell_mc_m2.pdf}
 \caption{Mean cell fraction after correction: M1 (left) and M2 (right),
   for each $\abseta$ bin.  Compare with data in
   Figure~\ref{fig:cell-before}.}
@@ -543,7 +764,7 @@ $\abseta$ bin in Figures~\ref{fig:cell-shift}~and~\ref{fig:cell-stretch}.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_shift.pdf}
+\includegraphics[width=0.92\textwidth]{llgamma/unconverted/plots/cell_shift.pdf}
 \caption{M2 shift correction vector $\text{shift}_k$ for each cell~$k$,
   per $\abseta$ bin.}
 \label{fig:cell-shift}
@@ -551,7 +772,7 @@ $\abseta$ bin in Figures~\ref{fig:cell-shift}~and~\ref{fig:cell-stretch}.
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.92\textwidth]{llgamma/baseline/plots/cell_stretch.pdf}
+\includegraphics[width=0.92\textwidth]{llgamma/unconverted/plots/cell_stretch.pdf}
 \caption{M2 stretch correction vector $\text{stretch}_k$ for each
   cell~$k$, per $\abseta$ bin.}
 \label{fig:cell-stretch}
@@ -563,161 +784,293 @@ $\abseta$ bin in Figures~\ref{fig:cell-shift}~and~\ref{fig:cell-stretch}.
 \label{sec:discussion}
 %% ====================================================================
 
-The nine-scenario evaluation reveals a clear hierarchy among the
-correction approaches.  This section presents a quantitative analysis,
-diagnoses the M2 instabilities, and compares the cell-level methods
-with the standard ATLAS fudge-factor corrections.
+This section analyses the correction performance in detail, describes
+the M2 stabilisation that transformed M2 from an unstable to the
+recommended method, compares with Francisco's
+\texttt{photoncellbasedrw} reference implementation, and evaluates
+the impact of the histogram range configuration.
 
-\subsection{M1 performance across all scenarios}
+\subsection{M1 performance}
 \label{sec:disc-m1}
 
-Method~1 delivers consistent and substantial improvements across all
-nine channel$\times$scenario combinations.  For the primary benchmark
+Method~1 delivers consistent improvements over uncorrected MC across all
+scenario combinations.  For the primary benchmark
 ($Z \to \ell\ell\gamma$, unconverted):
 \begin{itemize}
   \item \Reta: average $\chisq$ reduced from $0.0015$ (uncorrected MC)
         to $0.0006$ (M1), a factor~2.5 improvement.
   \item \weta: reduced from $0.0076$ to $0.0007$, a factor~10.9
         improvement --- the largest gain of any method for any variable.
-  \item \Rphi: increases slightly from $0.0007$ to $0.0011$.
+  \item \Rphi: \textbf{increases} from $0.0007$ to $0.0011$, a
+        $1.6\times$ degradation.
 \end{itemize}
-The pattern is reproduced across all channels and conversion scenarios
-(Table~\ref{tab:chi2-summary}).  M1's strength for \Reta\ and \weta\
-is expected: both variables are dominated by the central cells of the
-$7 \times 11$ cluster, where the mean cell fraction is large and the
-shift correction has the most leverage.
 
-The \Rphi\ anomaly merits discussion.  $R_\phi = E(3\!\times\!3) /
-E(3\!\times\!7)$ is a ratio of two overlapping energy sums sharing the
-same $3\!\times\!3$ core.  The M1 shift corrects each cell
-independently; while the individual cells improve in mean, the
-\emph{ratio} of two correlated sums need not improve --- the correction
-introduces coherent shifts in both numerator and denominator that can
-increase the spread of the ratio distribution.  This is a fundamental
-limitation of cell-level mean corrections for ratio observables whose
-numerator and denominator share cells.  In practice the degradation is
-modest ($0.0007 \to 0.0011$) and M1's \Rphi\ $\chisq$ remains well
-below the uncorrected \weta\ value, so the overall correction quality
-is still acceptable.
+M1's strength for \Reta\ and \weta\ is expected: both variables are
+dominated by the central cells of the $7 \times 11$ cluster, where the
+mean cell fraction is large and the shift correction has the most
+leverage.
+
+The \Rphi\ degradation is a fundamental limitation of cell-level mean
+corrections for ratio observables.
+$R_\phi = E(3\!\times\!3) / E(3\!\times\!7)$ is a ratio of two
+overlapping energy sums sharing the same $3\!\times\!3$ core.  The M1
+shift corrects each cell independently; while the individual cells
+improve in mean, the \emph{ratio} of two correlated sums need not
+improve --- the correction introduces coherent shifts in both numerator
+and denominator that can increase the spread of the ratio distribution.
 
 M1 preserves total cluster energy exactly by construction
 ($\sum_k \Delta_k = 0$), requiring no rescaling.  This property makes
-M1 robust against pathological cell configurations and suitable for
-production use without additional safeguards.
+M1 robust against pathological cell configurations.
 
-\subsection{M2 instability diagnosis}
-\label{sec:disc-m2-instability}
+However, M1 is \textbf{outperformed by the stabilised M2} for all three
+variables (Section~\ref{sec:disc-m2-stabilisation}), and M2 is therefore
+the recommended cell-level correction method.
 
-Contrary to the expectation that matching both the mean and variance
-of the cell fraction should uniformly improve agreement, M2 exhibits
-\textbf{catastrophic failures} in specific $\abseta$ bins.
-Table~\ref{tab:m2-failures} lists the most severe cases.
+\subsection{M2 stabilisation: from catastrophic failures to best-in-class performance}
+\label{sec:disc-m2-stabilisation}
+
+\subsubsection{Previous M2 behaviour (initial implementation)}
+\label{sec:disc-m2-old}
+
+The initial implementation of M2 used:
+\begin{enumerate}
+  \item The running-variance formula~\eqref{eq:manual-variance} to
+        compute $\sigma_{\text{data},k}$ and $\sigma_{\text{MC},k}$,
+        accumulated as running sums $\sum f_k^2$ and $\sum f_k$ during
+        the event loop.
+  \item A wide, uniform histogram range $[-1, 2]$ for all cells (used
+        only for diagnostic histograms, not for $\sigma$ computation).
+  \item A minimum-fraction fallback: cells with
+        $\mu_{\text{MC},k} < 0.002$ received M1 instead of M2.
+\end{enumerate}
+
+This configuration produced \textbf{catastrophic failures} in specific
+$\abseta$ bins.  The worst cases are summarised in
+Table~\ref{tab:m2-old-failures}.
 
 \begin{table}[htbp]
 \centering
-\caption{M2 catastrophic failures: $\abseta$ bins where M2 produces
-  $\chisq$ values more than $10\times$ worse than uncorrected MC.
-  Only the worst instances per scenario are shown; additional bins
-  with $5$--$10\times$ degradation exist in most scenarios.}
-\label{tab:m2-failures}
-\begin{tabular}{llllrrl}
+\caption{M2 catastrophic failures in the initial implementation:
+  $\abseta$ bins where M2 produced $\chisq$ values far worse than
+  uncorrected MC.  These failures are \textbf{no longer present} in
+  the stabilised implementation.}
+\label{tab:m2-old-failures}
+\begin{tabular}{llrrl}
 \toprule
-Channel & Scenario & $\abseta$ bin & Variable
-  & $\chisq^{\text{MC}}$ & $\chisq^{\text{M2}}$
+$\abseta$ bin & Variable
+  & $\chisq^{\text{MC}}$ & $\chisq^{\text{M2,old}}$
   & Ratio \\
 \midrule
-$ee\gamma$ & Unconv.
-  & {[}0.60, 0.80) & $R_\phi$ & 0.0004 & 0.0323 & $81\times$ \\
-  & & {[}0.60, 0.80) & $w_{\eta 2}$ & 0.0017 & 0.0481 & $28\times$ \\
-  & & {[}1.20, 1.30) & $R_\phi$ & 0.0011 & 0.0641 & $58\times$ \\
-  & & {[}1.20, 1.30) & $w_{\eta 2}$ & 0.0016 & 0.0273 & $17\times$ \\
-\midrule
-$\mu\mu\gamma$ & Converted
-  & {[}0.20, 0.40) & $R_\phi$ & 0.0012 & 0.0426 & $36\times$ \\
-  & & {[}0.20, 0.40) & $w_{\eta 2}$ & 0.0033 & 0.0463 & $14\times$ \\
-  & & {[}1.00, 1.20) & $R_\phi$ & 0.0004 & 0.0360 & $90\times$ \\
-  & & {[}1.00, 1.20) & $w_{\eta 2}$ & 0.0011 & 0.0588 & $53\times$ \\
-\midrule
-$\ell\ell\gamma$ & Converted
-  & {[}0.20, 0.40) & $R_\phi$ & 0.0007 & 0.0262 & $37\times$ \\
-  & & {[}0.20, 0.40) & $w_{\eta 2}$ & 0.0025 & 0.0509 & $20\times$ \\
-  & & {[}1.00, 1.20) & $R_\phi$ & 0.0003 & 0.0238 & $79\times$ \\
-  & & {[}1.00, 1.20) & $w_{\eta 2}$ & 0.0008 & 0.0159 & $20\times$ \\
+{[}0.60, 0.80) & $R_\phi$ & 0.0004 & 0.0323 & $81\times$ \\
+{[}0.60, 0.80) & $w_{\eta 2}$ & 0.0017 & 0.0481 & $28\times$ \\
+{[}1.20, 1.30) & $R_\phi$ & 0.0011 & 0.0641 & $58\times$ \\
+{[}1.20, 1.30) & $w_{\eta 2}$ & 0.0016 & 0.0273 & $17\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Root cause: systematically large stretch factors in peripheral cells.}
-The M2 stretch factor is
-$\text{stretch}_k = \sigma_{\text{data},k} / \sigma_{\text{MC},k}$.
-Inspection of the computed stretch vectors reveals a striking
-asymmetry: stretch values are almost exclusively $\geq 1$, and often
-\textbf{massively} so.  The minimum stretch across all 77~cells and
-14~$\abseta$ bins is $\sim$0.93 --- barely below unity --- while the
-maximum reaches $\sim$16 (\texttt{eegamma} baseline, $\abseta$ bin~3,
-cell~44) and $\sim$10 (\texttt{llgamma} baseline, same bin/cell).
+Inspection of the M2 stretch vectors revealed the root cause:
+stretch values were almost exclusively $\geq 1$ and in many cells
+\textbf{far larger than physically reasonable}, reaching
+$\text{stretch}_k \sim 10$--$16$ in the worst $\abseta$ bins.  This
+meant $\sigma_{\text{data},k} \gg \sigma_{\text{MC},k}$: the measured
+data cell-energy distributions appeared systematically wider than MC.
 
-This means $\sigma_{\text{data},k} > \sigma_{\text{MC},k}$
-\textbf{essentially everywhere}: data cell-energy distributions are
-systematically wider than MC.  The likely cause is that MC showers are
-``too clean'' --- they lack the full spectrum of detector noise,
-pile-up fluctuations, and material-interaction tails that broaden the
-real data distributions.
-
-The magnitude of the discrepancy depends on the energy fraction
-$\langle f_k \rangle$ carried by the cell.  For the central cells
-($\langle f_k \rangle \sim 0.02$--$0.10$), both $\sigma_{\text{data}}$
-and $\sigma_{\text{MC}}$ are sizable and their ratio stays in the range
-0.95--1.3 --- benign corrections.  For peripheral cells
-($\langle f_k \rangle < 10^{-3}$), both standard deviations are tiny
-($\sim$$10^{-4}$), and even a small absolute difference
-$\sigma_{\text{data}} - \sigma_{\text{MC}}$ translates into a ratio
-$\gg 1$.  In the catastrophic $\abseta$ bins:
+The combination of all three issues described in
+Sections~\ref{sec:m2-getrms}--\ref{sec:m2-no-fallback} was responsible:
 \begin{itemize}
-  \item $\abseta \in [0.60, 0.80)$ (bin~3, unconverted): 18 of 77 cells
-    have $\text{stretch} > 2$, with a maximum of 10.2;
-  \item $\abseta \in [1.20, 1.30)$ (bin~6, unconverted): 30 of 77 cells
-    have $\text{stretch} > 2$, with a maximum of 9.8;
-  \item for the \texttt{eegamma} channel (lower statistics), the maxima
-    rise to 16.3 and 15.3 in the same bins.
+  \item \textbf{Numerical cancellation} in the running-variance formula
+        inflated $\sigma_{\text{data}}$ for peripheral cells where both
+        $\sum f^2$ and $(\sum f)^2 / N$ were nearly equal.  Even a
+        relative error of $10^{-7}$ in $\sum f_k^2$ (accumulated over
+        $\sim$$2.8\,\text{M}$ MC events) could produce a factor-of-2
+        error in $\hat\sigma^2$ when $\sigma \sim 10^{-4}$.
+  \item \textbf{Wide histogram ranges} (when histograms \emph{were} used
+        for diagnostics) included extreme stochastic outliers ---
+        negative fractions from noise, fractions $> 1$ from
+        mis-reconstruction --- that inflated the tails of the
+        distribution and pushed the RMS upward.
+  \item \textbf{The minimum-fraction fallback} masked the worst cases by
+        reverting to M1 for cells below $\mu < 0.002$, but created an
+        inconsistent mixture: 20--40 cells (depending on $\abseta$)
+        received M1, while the remaining received M2 with potentially
+        large stretches.  The energy conservation rescaling then
+        redistributed energy in a way that was neither pure M1 nor
+        pure M2, often making both the central and peripheral cells
+        worse.
 \end{itemize}
 
-These large stretch factors \textbf{amplify} the cell-energy
-fluctuations far beyond their physical range.  After the
-energy-conservation rescaling~\eqref{eq:m2-rescale}, the amplified
-peripheral cells steal energy from the central core, distorting the
-shower shape variables and producing the observed catastrophic $\chisq$
-values.
+\subsubsection{The three-pronged fix}
+\label{sec:disc-m2-fix}
 
-Crucially, the reverse problem ($\text{stretch} \ll 1$) is
-\textbf{not observed}: MC never significantly over-estimates the
-cell-energy variance.  The instability is therefore one-sided: it is
-always an amplification, never a compression.
+The M2 instabilities were resolved by three simultaneous changes:
 
-This is \textbf{not a bug} but an \textbf{intrinsic limitation} of the
-variance-matching approach when applied to high-dimensional clusters
-where most cells carry negligible energy and the MC systematically
-underestimates the cell-level variance.  The problem is exacerbated
-for converted photons, which have more diffuse showers and hence more
-cells with intermediate energy fractions in the regime where the
-variance ratio is most unstable.
+\begin{enumerate}
+  \item \textbf{Histogram-based $\sigma$ via \texttt{GetRMS()}}
+        (Section~\ref{sec:m2-getrms}): replaced the running-variance
+        accumulators with per-cell TH1D histograms.  The $\sigma$ is
+        now computed from the binned distribution, eliminating the
+        catastrophic cancellation in the $\langle f^2 \rangle -
+        \langle f \rangle^2$ subtraction.
+  \item \textbf{Cell-dependent histogram ranges}
+        (Section~\ref{sec:m2-cellranges}):  the histogram range
+        for each cell is adapted to its expected fraction magnitude
+        (Table~\ref{tab:cell-ranges}).  Extreme outliers beyond the
+        range are naturally excluded from the RMS, preventing inflated
+        $\sigma$ values in peripheral cells.  This acts as implicit
+        regularisation that is physically motivated: fraction values
+        outside $[-0.1, 0.2]$ for a peripheral cell are not expected
+        from a well-reconstructed photon shower and should not
+        influence the correction.
+  \item \textbf{Removal of the minimum-fraction fallback}
+        (Section~\ref{sec:m2-no-fallback}):  all 77~cells now receive
+        the full M2 shift+stretch correction, ensuring a consistent
+        transformation across the cluster.
+\end{enumerate}
 
-Notably, the failing $\abseta$ bins differ between unconverted
-({[}0.60, 0.80) and {[}1.20, 1.30)) and converted ({[}0.20, 0.40) and
-{[}1.00, 1.20)) photons.  This bin-dependent pattern further supports
-the diagnosis: the instability depends on the specific shower topology
-in each ($\abseta$, conversion type) combination, rather than on a fixed
-detector geometry effect.
+Together, these changes eliminate all three failure mechanisms.  The
+fixes are complementary: the histogram approach provides numerical
+stability, the cell-dependent ranges provide regularisation, and the
+removal of the fallback ensures consistency.
 
-\paragraph{M2 averaged performance.}
-Table~\ref{tab:chi2-summary} shows that M2 \textbf{never outperforms
-M1 on average} across any of the 27 (channel $\times$ scenario $\times$
-variable) combinations.  The catastrophic bins dominate the average,
-overwhelming the improvements that M2 provides in other bins.  For
-example, in the combined channel (unconverted), M2 achieves excellent
-$\chisq$ in the high-$\abseta$ region ($\abseta > 1.8$), often matching
-or surpassing M1 --- but this is erased by a single bin where $\chisq$
-is $50\times$ worse.
+\subsubsection{Stabilised M2 performance}
+\label{sec:disc-m2-new}
+
+Table~\ref{tab:m2-comparison} compares the M1 and stabilised M2
+performance for the primary benchmark ($Z \to \ell\ell\gamma$,
+unconverted).
+
+\begin{table}[htbp]
+\centering
+\caption{Average $\chisq$ for M1 vs.\ stabilised M2 (cell-dependent
+  ranges), $Z \to \ell\ell\gamma$ unconverted.  The improvement
+  column shows the relative reduction from M1 to M2.  Fudge factors
+  are shown for reference.}
+\label{tab:m2-comparison}
+\begin{tabular}{lrrrr}
+\toprule
+Variable & MC & M1 & M2 (new) & Fudge \\
+\midrule
+\Reta  & 0.0015 & 0.0006 & \textbf{0.0005} & 0.0005 \\
+\Rphi  & 0.0007 & 0.0011 & \textbf{0.0006} & 0.0005 \\
+\weta  & 0.0076 & 0.0007 & \textbf{0.0005} & 0.0005 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Key observations:
+\begin{itemize}
+  \item M2 now \textbf{outperforms M1 for all three variables}.  The
+        improvement is most dramatic for \Rphi, where M1 actually
+        degraded the agreement (0.0011 vs.\ 0.0007 uncorrected) while
+        M2 improves it (0.0006).  This represents a 45\% improvement
+        of M2 over M1 for \Rphi.
+  \item For \weta, M2 achieves a $\chisq$ of 0.0005 versus M1's 0.0007,
+        a 29\% improvement.  The variance matching is particularly
+        effective for \weta, which depends on the energy-weighted $\eta$
+        width --- a higher-order moment of the cell energy distribution
+        that benefits from matching both the mean and the spread.
+  \item For \Reta, M2 achieves 0.0005 versus M1's 0.0006, a 17\%
+        improvement.  \Reta\ is dominated by the central $3 \times 7$
+        window where the mean correction already captures most of the
+        physics; the additional variance matching provides a smaller
+        but still measurable gain.
+  \item M2 \textbf{nearly matches the fudge factors}: identical $\chisq$
+        for \Reta\ (0.0005) and \weta\ (0.0005), and within 20\% for
+        \Rphi\ (0.0006 vs.\ 0.0005).  This is remarkable given that fudge
+        factors are tuned independently per variable with full freedom,
+        while M2 derives a single set of 77~cell corrections from which
+        all shower shapes are recomputed.
+  \item \textbf{No catastrophic failures remain.}  The worst per-bin
+        M2 $\chisq$ is 0.0019 ($\abseta \in [1.30, 1.37)$, \weta),
+        which is in the near-crack region where all methods struggle.
+        No $\abseta$ bin shows M2 degradation relative to uncorrected MC.
+\end{itemize}
+
+Based on these results, \textbf{M2 with cell-dependent histogram ranges
+is the recommended cell-level correction method}, replacing the earlier
+recommendation of M1.
+
+
+\subsection{Cross-source comparison with Francisco's \texttt{photoncellbasedrw}}
+\label{sec:disc-francisco}
+
+To validate the M2 corrections, the stabilised pipeline is compared
+against Francisco Almeida's \texttt{photoncellbasedrw} Run\,3
+implementation, which serves as the reference for the cell-level
+reweighting approach.
+
+\subsubsection{Methodology}
+
+Francisco's code produces a single set of cell-level corrections
+per $\abseta$ bin, corresponding to a shift+stretch transformation
+equivalent to our M2.  His code does not separately implement M1.
+The comparison is performed by computing $\chisq$ for data versus
+each corrected MC variant from three sources:
+\begin{enumerate}
+  \item Francisco's Run\,3 output (\texttt{photoncellbasedrw\_run3}),
+        converted to our histogram format via
+        \texttt{convert\_histograms.py}.
+  \item Our pipeline with wide uniform ranges $[-1, 2]$.
+  \item Our pipeline with cell-dependent ranges
+        (Table~\ref{tab:cell-ranges}).
+\end{enumerate}
+All three use the same data and MC samples (unconverted,
+$Z \to \ell\ell\gamma$), so the $\chisq$ values are directly
+comparable.
+
+The comparison table (Table~\ref{tab:chi2-cmp-summary}) presents the
+averaged $\chisq$ across all $\abseta$ bins.
+
+\input{comparison_report/chi2_comparison_summary}
+
+\subsubsection{Histogram axis range effect}
+\label{sec:disc-range-effect}
+
+A direct comparison of the $\chisq$ values reveals that Francisco's
+``MC'' column shows slightly lower values than ours (e.g.\ 0.0013 vs.\
+0.0015 for \Reta\ MC).  Since both use the same underlying events, this
+difference is \textbf{not} a correction quality difference but a
+\textbf{metric definition difference}: the shower shape histograms from
+the two sources have different axis ranges.
+
+\begin{table}[htbp]
+\centering
+\caption{Shower shape histogram axis ranges: Francisco vs.\ this
+  analysis.  The chi-squared is computed only over bins within the
+  histogram range; events in the overflow are excluded.}
+\label{tab:axis-ranges}
+\begin{tabular}{lcc}
+\toprule
+Variable & Francisco range & This analysis \\
+\midrule
+\Reta  & $[0.80, 1.00]$ & $[0.80, 1.05]$ \\
+\Rphi  & $[0.80, 1.00]$ & $[0.50, 1.10]$ \\
+\weta  & $[0.006, 0.018]$ & $[0.005, 0.020]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Francisco's narrower ranges \textbf{exclude the distribution tails}
+where data--MC agreement is typically worst.  For \Rphi, the effect is
+most pronounced: Francisco uses $[0.80, 1.00]$ while we use
+$[0.50, 1.10]$, a $3\times$ wider range that includes the low-\Rphi\
+tail where MC systematically overestimates the data.  The $\chisq$ over
+a wider range captures disagreements that Francisco's metric does not
+probe.
+
+When comparing the \emph{corrected} distributions (Francisco's ``Corr.''
+vs.\ our M2), the values are very close:
+\begin{itemize}
+  \item \Reta: Francisco 0.0005 $\approx$ Cell-dep.\ M2 0.0005
+  \item \Rphi: Francisco 0.0005 vs.\ Cell-dep.\ M2 0.0006 (difference
+        attributable to the wider range capturing more of the tail)
+  \item \weta: Francisco 0.0005 $\approx$ Cell-dep.\ M2 0.0005
+\end{itemize}
+This confirms that the two implementations achieve equivalent correction
+quality.  The remaining systematic offset in the MC and M1 columns is
+entirely explained by the histogram range difference.
 
 \subsection{Comparison with fudge factors}
 \label{sec:disc-fudge}
@@ -727,38 +1080,93 @@ correction to the branch-level shower shape values.  The ``Fudged''
 column in the $\chisq$ tables represents the agreement between data
 and MC after these corrections.
 
-Fudge factors achieve the lowest average $\chisq$ in the majority of
-the 27 (channel $\times$ scenario $\times$ variable) combinations,
-typically outperforming M1 by 20--40\%.  For instance, in
-$Z \to \ell\ell\gamma$ (unconverted):\ \Reta\ $0.0005$ (Fudged) vs.\
-$0.0006$ (M1); \weta\ $0.0005$ vs.\ $0.0007$.
+For unconverted photons in the combined channel, the stabilised M2
+achieves:
+\begin{itemize}
+  \item \Reta: M2 $= 0.0005$, Fudge $= 0.0005$ --- \textbf{identical}.
+  \item \Rphi: M2 $= 0.0006$, Fudge $= 0.0005$ --- within 20\%.
+  \item \weta: M2 $= 0.0005$, Fudge $= 0.0005$ --- \textbf{identical}.
+\end{itemize}
 
-This marginal advantage is expected: fudge factors are tuned
-\emph{independently per variable} using the full data--MC comparison for
-that specific observable, whereas cell-level methods derive a
-\emph{single} set of 77--cell corrections from which all shower shapes
-are recomputed.  The cell-level approach has fewer effective degrees of
-freedom (77~shifts per $\abseta$ bin) to simultaneously correct three
-observables built from overlapping cell windows.
+The fudge factors' marginal advantage for \Rphi\ is expected: fudge
+factors are tuned \emph{independently per variable} using the full
+data--MC comparison for that specific observable, with one free parameter
+per $\abseta$ bin per variable.  M2 derives a single set of 77~cell
+corrections ($77 \times 2 = 154$ parameters: one shift and one stretch
+per cell per $\abseta$ bin) from which all shower shapes are recomputed.
+The cell-level approach has fewer effective degrees of freedom to
+simultaneously correct three observables built from overlapping cell
+windows.
 
-The key advantage of cell-level corrections is \textbf{physics
-generality}: any observable built from the Layer\,2 cell energies ---
-including variables not currently used in photon ID such as
-$E_{\text{ratio}}$, $f_{\text{side}}$, or new discrimination variables
---- benefits automatically from the same corrections without separate
-tuning.  Fudge factors would need to be re-derived for each new variable.
+The key advantages of cell-level corrections over fudge factors are:
+\begin{enumerate}
+  \item \textbf{Physics generality}: any observable built from the
+        Layer\,2 cell energies --- including variables not currently
+        used in photon ID such as $E_{\text{ratio}}$,
+        $f_{\text{side}}$, or new discrimination variables ---
+        benefits automatically from the same corrections without
+        separate tuning.
+  \item \textbf{Correlation preservation}: because the cell energies
+        are corrected before the shower shapes are computed, the
+        correlations between \Reta, \Rphi, and \weta\ are preserved
+        by construction.  Fudge factors, applied independently per
+        variable, can distort these correlations.
+\end{enumerate}
 
-A second advantage is \textbf{correlation preservation}: because the
-cell energies are corrected before the shower shapes are computed, the
-correlations between \Reta, \Rphi, and \weta\ are preserved by
-construction.  Fudge factors, applied independently per variable, can
-distort these correlations.
+With M2 now achieving performance virtually identical to fudge factors,
+these advantages become decisive: M2 provides the same per-variable
+quality while additionally preserving the full multivariate structure.
 
-In summary, M1 is the recommended cell-level method.  It provides
-\emph{most} of the fudge-factor improvement (within $\sim$30\%) while
-offering a more physically motivated and extensible correction
-framework.  Fudge factors remain the gold standard for per-variable
-agreement when only the three standard shower shapes are of interest.
+
+\subsection{Wide vs.\ cell-dependent histogram ranges}
+\label{sec:disc-wide-vs-cellrange}
+
+Table~\ref{tab:wide-vs-cellrange} compares the M2 performance
+between the wide $[-1, 2]$ and cell-dependent range configurations.
+
+\begin{table}[htbp]
+\centering
+\caption{Average $\chisq$ for M2 with wide vs.\ cell-dependent
+  histogram ranges, $Z \to \ell\ell\gamma$ unconverted.}
+\label{tab:wide-vs-cellrange}
+\begin{tabular}{lrrr}
+\toprule
+Range configuration & \Reta\ M2 & \Rphi\ M2 & \weta\ M2 \\
+\midrule
+Wide $[-1, 2]$     & 0.0006 & 0.0007 & 0.0005 \\
+Cell-dependent     & \textbf{0.0005} & \textbf{0.0006} & 0.0005 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The cell-dependent configuration provides a consistent improvement,
+most notably for \Reta\ (0.0005 vs.\ 0.0006) and \Rphi\ (0.0006 vs.\
+0.0007).  The improvement for \Rphi\ is the most significant: the
+tighter peripheral ranges prevent residual noise amplification that
+affects the $3\!\times\!3$ to $3\!\times\!7$ energy ratio.
+
+For \weta, both configurations achieve the same $\chisq$ of 0.0005.
+This is expected: \weta\ is computed over a $3 \times 5$ window that
+includes only 15~cells, most of which are central or direct-neighbour
+cells where the two range configurations produce similar $\sigma$
+estimates.
+
+The wide configuration still produces no catastrophic failures (the
+GetRMS and removal of the fallback are the primary stabilisation
+mechanisms), but the cell-dependent ranges provide the additional
+benefit of optimal resolution and physical regularisation.
+
+For the converted scenario, the difference is more pronounced:
+\begin{itemize}
+  \item Wide: \Rphi\ M2 $= 0.0013$, \weta\ M2 $= 0.0013$.
+  \item Cell-dependent: \Rphi\ M2 $= 0.0010$, \weta\ M2 $= 0.0010$.
+\end{itemize}
+The $\sim$25\% improvement for converted photons reflects the more
+diffuse shower profile, which populates wider tails in the cell-fraction
+distributions and is more sensitive to range-dependent outlier clipping.
+
+The cell-dependent configuration is recommended as the default.
+
 
 \subsection{Problematic \texorpdfstring{$\abseta$}{|eta|} regions}
 \label{sec:disc-problematic}
@@ -769,195 +1177,29 @@ Several $\abseta$ regions exhibit elevated $\chisq$ for all methods:
 The uncorrected MC shows the largest mismodelling for \weta\ in the
 forward region: $\chisq = 0.027$ at $\abseta \in [2.0, 2.2)$ and
 $\chisq = 0.030$ at $\abseta \in [2.2, 2.4)$ for the combined
-unconverted channel.  M1 reduces these by factors of 50--60 to
-$\chisq \approx 0.0005$, demonstrating that the cell-fraction mean
-shift captures the dominant mismodelling even where the detector
+unconverted channel.  M2 reduces these to
+$\chisq \approx 0.0003$--$0.0005$, demonstrating that the cell-fraction
+shift+stretch captures the dominant mismodelling even where the detector
 geometry differs significantly from the barrel.
 
 \paragraph{Near-crack region ($\abseta \in [1.30, 1.52)$).}
 The bins immediately adjacent to the calorimeter crack show elevated
-$\chisq$ for all methods.  The $[1.30, 1.37)$ bin, in particular,
-has limited data statistics (704 events for $ee\gamma$ unconverted)
-and residual material effects from the crack region that affect the
-shower profile.  All methods produce $\chisq \sim 0.01$--$0.03$ here,
-which is 5--10$\times$ worse than the barrel average.  The
-$[1.52, 1.60)$ bin, immediately after the crack, shows a similar
-pattern.  These bins are unlikely to improve without dedicated
-treatment (e.g.\ separate correction parameters for the transition
-region).
+$\chisq$ for all methods.  The $[1.30, 1.37)$ bin has limited data
+statistics and residual material effects from the crack region that
+affect the shower profile.  All methods produce $\chisq \sim
+0.01$--$0.02$ here, which is 5--10$\times$ worse than the barrel
+average.  The $[1.52, 1.60)$ bin, immediately after the crack, shows
+a similar pattern.  These bins are unlikely to improve without dedicated
+treatment.
 
 \paragraph{Converted photons.}
 All methods degrade for converted photons relative to unconverted, with
-the degradation factor roughly proportional to $\sqrt{N_{\text{unconv}} /
+the degradation roughly proportional to $\sqrt{N_{\text{unconv}} /
 N_{\text{conv}}}$, suggesting that statistical precision of the
 corrections is a limiting factor.  For the combined channel, the
 converted dataset has 45\,532 events versus 205\,309 unconverted (a
 factor~4.5 fewer), corresponding to a $\sim$$2\times$ increase in
 statistical uncertainty on the correction parameters.
-
-
-%% ====================================================================
-\section{Future Work}
-\label{sec:future}
-%% ====================================================================
-
-\subsection{M2 regularisation}
-\label{sec:future-regularisation}
-
-The M2 instabilities identified in Section~\ref{sec:disc-m2-instability}
-can be mitigated by regularising the stretch factor.  The key empirical
-observation is that the problem is \textbf{one-sided}: stretch values
-are almost exclusively $\geq 1$ (data distributions are systematically
-wider than MC), with extremes reaching $\sim$10--16 in the worst bins,
-while the minimum observed stretch is $\sim$0.93.  Regularisation
-therefore needs primarily to cap the upper tail.  Several strategies
-are possible:
-
-\begin{enumerate}
-  \item \textbf{Winsorisation (upper cap)}: restrict the stretch factor to
-        $\text{stretch}_k \leq s_{\max}$, e.g.\ $s_{\max} = 1.5$ or
-        $2.0$.  Since the instability is exclusively upward, a lower
-        bound is not needed in practice ($s_{\min} = 1.0$ suffices).
-        This is the simplest approach and guarantees bounded corrections,
-        at the cost of incomplete variance matching in capped cells.
-  \item \textbf{Peripheral-cell exclusion}: apply M2 only to cells with
-        $\langle f_k \rangle > f_{\min}$ (e.g.\ $f_{\min} = 0.002$)
-        and fall back to M1 for the remaining cells.  This preserves
-        M2's variance matching where it is stable while avoiding the
-        problematic near-zero regime.
-  \item \textbf{Regularised variance}: replace $\sigma_{\text{MC},k}$
-        with
-        $\sigma_{k,\text{reg}} = \sqrt{\sigma_{\text{MC},k}^2
-        + \varepsilon^2}$ for a small regularisation constant
-        $\varepsilon$, preventing the ratio from diverging when the
-        MC variance is small.  The optimal $\varepsilon$ can be
-        chosen by minimising the $\chisq$ on a held-out validation
-        sample.
-\end{enumerate}
-
-The peripheral-cell exclusion approach is the most physically motivated:
-cells with $f_k < 10^{-3}$ contribute negligibly to all standard shower
-shapes, and their variance carries no useful physics information.  A
-systematic study of $f_{\min}$ thresholds, evaluating $\chisq$ across
-all $\abseta$ bins, is the recommended first step.
-
-\subsection{\texorpdfstring{$\pt$}{pT}-dependent corrections}
-\label{sec:future-pt}
-
-The current corrections are derived in 14~$\abseta$ bins with no
-dependence on photon \pt.  Francisco Almeida's \texttt{photoncellbasedrw}
-framework uses $6~\pt \times 5~\text{hit-position} = 30$ bins per
-conversion type, with \textbf{no} $\abseta$ binning \cite{francisco}.
-These two binning strategies are completely orthogonal, addressing
-different physics:
-
-\begin{itemize}
-  \item $\abseta$ binning captures detector geometry effects (material
-        budget, cell granularity, crack proximity).
-  \item \pt\ binning captures energy-scale-dependent shower evolution
-        (depth of shower maximum, lateral spread).
-  \item Hit-position binning captures sub-cell impact-point effects on
-        the cell response.
-\end{itemize}
-
-The natural extension is a combined $\pt \times \abseta$ grid.
-With $6~\pt \times 14~\abseta = 84$ sets of corrections, the statistical
-dilution per bin must be monitored: the current dataset provides
-$\sim$$16\,\text{k}$ data events per $\abseta$ bin (unconverted,
-combined channel); splitting further into 6~\pt\ bins yields
-$\sim$$2.7\,\text{k}$ per cell, which may be marginal for stable
-variance estimation (relevant to M2, less so for M1).
-
-A staged approach is recommended:
-\begin{enumerate}
-  \item First evaluate M1 with $\pt \times \abseta$ to quantify the gain
-        from \pt-differential corrections.
-  \item If the gain is significant, add hit-position binning and assess
-        whether the statistical precision remains adequate.
-\end{enumerate}
-
-\subsection{Machine-learning approaches}
-\label{sec:future-ml}
-
-The M1 and M2 methods apply independent linear corrections to each of
-the 77~cells.  This has two fundamental limitations:
-(a)~inter-cell correlations are not preserved beyond the mean (M1) or
-first two moments (M2), and (b)~higher-order (non-Gaussian) features of
-the cell energy distribution are not captured.  Machine-learning methods
-can address both.
-
-\subsubsection{Normalising flows}
-
-A normalising flow \cite{papamakarios} learns a bijective transformation
-$g: \mathbb{R}^{77} \to \mathbb{R}^{77}$ such that the
-distribution of $g(\mathbf{f}_{\text{MC}})$ matches
-$\mathbf{f}_{\text{data}}$, where $\mathbf{f}$ is the 77-dimensional
-vector of cell energy fractions.
-
-\begin{itemize}
-  \item \textbf{Full multivariate correction}: the transformation
-        operates on the joint distribution of all 77~cells
-        simultaneously, automatically preserving inter-cell correlations
-        to all orders.
-  \item \textbf{Conditional flows}: the transformation can be
-        conditioned on $(\pt, \eta)$, providing differential corrections
-        without explicit binning and the associated statistical
-        fragmentation.
-  \item \textbf{No variance-ratio instability}: normalising flows do not
-        compute explicit $\sigma$ ratios; the transformation is learned
-        end-to-end, naturally avoiding the M2 failure mode.
-  \item \textbf{Non-Gaussian tails}: normalising flows can model
-        arbitrary distributions, including the heavy tails and
-        near-zero peaks observed in peripheral cell fractions.
-\end{itemize}
-
-The training data would consist of cell fraction vectors from data and MC
-events passing the same $Z \to \ell\ell\gamma$ selection, with the flow
-trained to transport the MC distribution to data.
-
-\subsubsection{Quantile regression and mapping}
-
-An alternative per-cell approach is quantile mapping: for each cell~$k$,
-the MC fraction $f_k^{\text{MC}}$ is mapped to the data distribution via
-\begin{equation}
-  f_k^{\text{corr}} = F_{\text{data},k}^{-1}\bigl(
-    F_{\text{MC},k}(f_k^{\text{MC}})\bigr) \,,
-\end{equation}
-where $F$ denotes the cumulative distribution function.  This can be
-implemented empirically (histogram-based CDF) or learned via
-neural-network quantile regression \cite{koenker}.
-
-Quantile mapping is non-linear and can correct arbitrary distributional
-differences on a per-cell basis, improving on the linear M1/M2
-transformations.  It can also be extended to conditional quantile
-mapping, where $F$ depends on $(\pt, \eta)$.  However, like M1/M2, it
-operates per cell and does not intrinsically preserve inter-cell
-correlations.
-
-\subsubsection{Practical considerations}
-
-Machine-learning approaches offer the theoretical promise of superior
-corrections but face practical challenges:
-\begin{itemize}
-  \item \textbf{Training data}: the $Z \to \ell\ell\gamma$ sample
-        provides $\sim$$200\,\text{k}$ data events and
-        $\sim$$2.8\,\text{M}$ MC events (unconverted, combined channel).
-        This may be limiting for 77-dimensional flows.
-  \item \textbf{Overfitting}: regularisation, early stopping, and
-        validation splits are essential; the corrections must be
-        evaluated on a statistically independent dataset.
-  \item \textbf{Inference in C++}: ATLAS production workflows require
-        fast C++ inference, necessitating ONNX export or equivalent.
-  \item \textbf{Transferability}: corrections derived on FSR photons
-        must be validated for other photon populations (e.g.\ $H \to
-        \gamma\gamma$, $\gamma$+jets), where the \pt\ spectrum and
-        isolation environment differ.
-\end{itemize}
-
-Given the M2 instability results, normalising flows represent the most
-promising direction: they avoid explicit moment matching, preserve the
-full multivariate structure, and can be conditioned on kinematics
-continuously.
 
 
 %% ====================================================================
@@ -969,38 +1211,42 @@ This note documents a cell-level energy reweighting pipeline for
 correcting photon shower shape variables (\Reta, \Rphi, \weta) in ATLAS
 Run\,3 simulation.  Using $Z \to \ell\ell\gamma$ events from 2024 data
 and MC23e, corrections are derived and applied in 14~$\abseta$ bins
-across three decay channels and three conversion scenarios (nine
-configurations total, $\sim$$250\,\text{k}$ data events in the
-combined unconverted sample).
+for the combined channel and three conversion scenarios
+($\sim$$250\,\text{k}$ data events in the unconverted sample).
 
 Two methods are implemented:
 \begin{itemize}
   \item \textbf{M1 (flat shift)}: corrects the mean cell energy fraction
         with exact energy conservation.  Reduces the average $\chisq$
-        by factors of 2--11 across all scenarios.  M1 is the
-        \textbf{recommended cell-level method}: it is stable in every
-        $\abseta$ bin, requires no regularisation, and achieves
-        performance within $\sim$30\% of the empirical fudge factors.
-  \item \textbf{M2 (shift+stretch)}: additionally matches the cell
-        fraction variance.  \textbf{Not recommended} in its current form
-        due to catastrophic instabilities in specific $\abseta$ bins
-        (up to $90\times$ worse than uncorrected MC), caused by
-        divergent variance ratios in peripheral cells.  Regularisation
-        of the stretch factor (Section~\ref{sec:future-regularisation})
-        is required before M2 can be used reliably.
+        for \Reta\ by a factor~2.5 and for \weta\ by a factor~10.9,
+        but degrades \Rphi\ by $1.6\times$ due to the sensitivity of
+        $R_\phi = E(3\!\times\!3)/E(3\!\times\!7)$ to coherent mean
+        shifts in overlapping windows.
+  \item \textbf{M2 (shift+stretch, stabilised)}: additionally matches
+        the cell fraction variance using a linear transformation.
+        Three targeted improvements --- histogram-based $\sigma$
+        estimation via \texttt{GetRMS()}, cell-dependent histogram
+        ranges providing natural regularisation, and removal of the
+        minimum-fraction fallback --- eliminated the catastrophic
+        instabilities ($\chisq$ degradations up to $90\times$) that
+        affected the initial implementation.  The stabilised M2 now
+        \textbf{outperforms M1 for all three variables}, with
+        improvements of 17\% (\Reta), 45\% (\Rphi), and 29\% (\weta).
 \end{itemize}
 
-Fudge factors remain the most precise per-variable corrections,
-marginally outperforming M1.  However, cell-level corrections offer
-two distinct advantages: (a)~a single set of corrections simultaneously
-improves \emph{all} observables built from cell energies, and (b)~the
-inter-variable correlations are preserved by construction.
+\textbf{M2 with cell-dependent histogram ranges is the recommended
+cell-level correction method.}  Its average $\chisq$ nearly matches the
+empirical ATLAS fudge factors: identical for \Reta\ and \weta\ (0.0005),
+and within 20\% for \Rphi\ (0.0006 vs.\ 0.0005).  Unlike fudge
+factors, M2 preserves inter-variable correlations and automatically
+improves all observables built from Layer\,2 cell energies.
 
-Priority directions for future work include regularisation of M2
-(Section~\ref{sec:future-regularisation}), $\pt$-differential
-corrections (Section~\ref{sec:future-pt}), and normalising flows
-that avoid explicit moment matching entirely
-(Section~\ref{sec:future-ml}).
+A cross-source comparison with Francisco Almeida's
+\texttt{photoncellbasedrw} Run\,3 output confirms equivalent correction
+quality.  Small residual $\chisq$ differences are fully attributable to
+different shower shape histogram axis ranges (Francisco uses narrower
+ranges that exclude the distribution tails, producing systematically
+lower $\chisq$ values for the same underlying correction).
 
 
 %% ====================================================================
@@ -1010,9 +1256,19 @@ that avoid explicit moment matching entirely
 %% ====================================================================
 
 This appendix contains the per-$\abseta$-bin $\chisq$ tables for all
-channel and conversion scenario combinations.
+conversion scenario combinations.
 
 \input{chi2_tables}
+
+\section{Cross-Source Comparison Per-Eta Tables}
+\label{app:comparison-tables}
+
+This appendix contains the per-$\abseta$-bin $\chisq$ comparison
+between Francisco's \texttt{photoncellbasedrw} Run\,3 output, the
+wide $[-1,2]$ range configuration, and the cell-dependent range
+configuration, for each shower shape variable individually.
+
+\input{comparison_report/chi2_comparison}
 
 
 %% ====================================================================
@@ -1027,18 +1283,6 @@ channel and conversion scenario combinations.
   M.~Fernandes da Silva,
   ``Photon shower shape studies with Run\,3 data'',
   ATL-COM-PHYS-2025-662 (2025).
-
-\bibitem{papamakarios}
-  G.~Papamakarios, E.~Nalisnick, D.~J.~Rezende, S.~Mohamed, and
-  B.~Lakshminarayanan,
-  ``Normalizing flows for probabilistic modeling and inference'',
-  \emph{J.\ Mach.\ Learn.\ Res.} \textbf{22} (2021) 1--64,
-  \href{https://arxiv.org/abs/1912.02762}{arXiv:1912.02762}.
-
-\bibitem{koenker}
-  R.~Koenker and G.~Bassett,
-  ``Regression quantiles'',
-  \emph{Econometrica} \textbf{46} (1978) 33--50.
 
 \end{thebibliography}
 

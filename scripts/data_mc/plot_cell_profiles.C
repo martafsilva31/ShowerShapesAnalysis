@@ -2,19 +2,22 @@
 // plot_cell_profiles.C
 //
 // Six separate PDFs, one page per eta bin (14 bins), portrait canvas:
-//   cell_data.pdf      — Data mean cell energy fractions
-//   cell_mc.pdf        — MC mean cell energy fractions (original)
-//   cell_mc_m1.pdf     — MC after M1 (shift) reweighting
-//   cell_mc_m2.pdf     — MC after M2 (shift+stretch) reweighting
-//   cell_shift.pdf     — Per-cell shift correction (M1 delta_k)
-//   cell_stretch.pdf   — Per-cell stretch correction (M2 sigma_d/sigma_MC)
+//   cell_data.pdf      -- Data mean cell energy fractions
+//   cell_mc.pdf        -- MC mean cell energy fractions (original)
+//   cell_mc_m1.pdf     -- MC after M1 (shift) reweighting
+//   cell_mc_m2.pdf     -- MC after M2 (shift+stretch) reweighting
+//   cell_shift.pdf     -- Per-cell shift correction (M1 delta_k)
+//   cell_stretch.pdf   -- Per-cell stretch correction (M2 sigma_d/sigma_MC)
 //
-// Header layout matches Francisco's style (3-column, 2 rows above the plot):
-//   ATLAS Work in Progress  |  channel label  |  map type
-//   sqrt(s) = 13.6 TeV      |  eta range / bin number  |  scenario
+// When binning="eta_pt", also produces per-pT-bin PDFs:
+//   cell_<type>_pt<PP>.pdf  (one PDF per pT bin, 14 eta-bin pages each)
 //
-// Usage:
-//   root -l -b -q 'plot_cell_profiles.C("eegamma", "baseline")'
+// Parameters:
+//   channel   "eegamma", "mumugamma", or "llgamma"
+//   scenario  conversion scenario
+//   baseDir   output base directory
+//   binning   "eta" or "eta_pt"
+//   isolation "loose" or "tight"
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "config.h"
@@ -36,7 +39,6 @@ using namespace config;
 
 // ======================================================================
 // Reshape a 1D correction histogram (kClusterSize bins) into a 7x11 TH2D.
-// Cell index k -> eta = k/kPhiSize, phi = k%kPhiSize
 // ======================================================================
 TH2D* corrTo2D(TH1D* h1, const char* name) {
     TH2D* h2 = new TH2D(name, "",
@@ -50,30 +52,24 @@ TH2D* corrTo2D(TH1D* h1, const char* name) {
 
 
 // ======================================================================
-// Draw one cell map on canvas c with Francisco-style 3-column header.
-// Single-canvas layout (no sub-pads): top margin holds labels,
-// margins set directly on c. Canvas should be 800x600.
-//
-// Header rows (NDC, within top margin):
-//   Row 1: ATLAS WIP (left) | channel (centre) | map type (right)
-//   Row 2: sqrt(s)  (left)  | eta bin  (centre) | scenario  (right)
+// Draw one cell map with 3-column header.
+// Optional ptLabel drawn in row 3 (below eta label).
 // ======================================================================
 void drawCellMap(TH2D* hIn,
-                 const char* typeLabel,   // "Data", "Shift correction", etc.
-                 const char* chLabel,     // "Z#rightarrowee#gamma"
-                 const char* etaLabel,    // "Bin 3:  0.60 < |#eta| < 0.80"
-                 const char* scenLabel,   // scenario description
-                 TCanvas* c) {
+                 const char* typeLabel,
+                 const char* chLabel,
+                 const char* etaLabel,
+                 const char* scenLabel,
+                 TCanvas* c,
+                 const char* ptLabel = nullptr) {
     c->cd();
     c->Clear();
 
-    // Single-canvas margins (match Francisco's style)
     c->SetLeftMargin(0.12);
     c->SetRightMargin(0.18);
     c->SetBottomMargin(0.12);
-    c->SetTopMargin(0.16);
+    c->SetTopMargin(ptLabel ? 0.20 : 0.16);
 
-    // Style and draw the histogram directly (no clone needed)
     hIn->SetStats(0);
     hIn->SetTitle("");
 
@@ -89,17 +85,14 @@ void drawCellMap(TH2D* hIn,
     hIn->GetZaxis()->SetLabelSize(0.030);
     hIn->GetZaxis()->SetTitleSize(0.045);
 
-    // Per-cell bin labels (1..7 on X, 1..11 on Y) — matches Francisco's style
     for (int i = 1; i <= kEtaSize; ++i) hIn->GetXaxis()->SetBinLabel(i, Form("%d", i));
     for (int i = 1; i <= kPhiSize; ++i) hIn->GetYaxis()->SetBinLabel(i, Form("%d", i));
-    // Ticks at every bin boundary (0,1,...,7 and 0,1,...,11)
     hIn->GetYaxis()->SetNdivisions(kPhiSize, false);
     hIn->GetXaxis()->SetNdivisions(kEtaSize, false);
 
     hIn->Draw("COLZ");
 
-    // Cell value annotations drawn at bin centres (using GetBinCenter to
-    // handle any axis range correctly: [0,7], [0.5,7.5], etc.)
+    // Cell value annotations
     TLatex txt;
     txt.SetTextAlign(22);
     txt.SetTextFont(42);
@@ -121,47 +114,58 @@ void drawCellMap(TH2D* hIn,
     }
 
     // ---- 3-column header in top margin (NDC) ----
-    // With topMargin=0.16, top of plot area is at y_ndc=0.84.
-    // Row 1 baseline y=0.955, Row 2 baseline y=0.895 — both within margin.
     TLatex lat;
     lat.SetNDC();
     lat.SetTextFont(42);
 
+    double row1Y = ptLabel ? 0.965 : 0.955;
+    double row2Y = ptLabel ? 0.920 : 0.895;
+    double row3Y = 0.875;
+
     // Row 1
     lat.SetTextSize(0.038);
     lat.SetTextAlign(11);
-    lat.DrawLatex(0.03, 0.955, "#bf{#it{ATLAS}} Work in Progress");
-    lat.DrawLatex(0.44, 0.955, chLabel);
-    lat.SetTextAlign(31);                              // right-justified
-    lat.DrawLatex(0.97, 0.955, typeLabel);
+    lat.DrawLatex(0.03, row1Y, "#bf{#it{ATLAS}} Work in Progress");
+    lat.DrawLatex(0.44, row1Y, chLabel);
+    lat.SetTextAlign(31);
+    lat.DrawLatex(0.97, row1Y, typeLabel);
 
     // Row 2
     lat.SetTextSize(0.033);
     lat.SetTextAlign(11);
-    lat.DrawLatex(0.03, 0.895, "#sqrt{s} = 13.6 TeV");
-    lat.DrawLatex(0.44, 0.895, etaLabel);
+    lat.DrawLatex(0.03, row2Y, "#sqrt{s} = 13.6 TeV");
+    lat.DrawLatex(0.44, row2Y, etaLabel);
     lat.SetTextSize(0.028);
-    lat.SetTextAlign(31);                              // right-justified
-    lat.DrawLatex(0.97, 0.895, scenLabel);
+    lat.SetTextAlign(31);
+    lat.DrawLatex(0.97, row2Y, scenLabel);
+
+    // Row 3 (pT label, optional)
+    if (ptLabel) {
+        lat.SetTextSize(0.033);
+        lat.SetTextAlign(11);
+        lat.DrawLatex(0.44, row3Y, ptLabel);
+    }
 }
 
 
 // ======================================================================
 // Main
 // ======================================================================
-int plot_cell_profiles(const char* channel  = "eegamma",
-                       const char* scenario = "baseline",
-                       const char* baseDir  =
-                           "../../output/cell_energy_reweighting_Francisco_method/data24") {
+int plot_cell_profiles(const char* channel   = "eegamma",
+                       const char* scenario  = "unconverted",
+                       const char* baseDir   = "../../output/Layer_2/eta_loose",
+                       const char* binning   = "eta",
+                       const char* isolation = "loose") {
 
     const char* chLabel   = channelLabel(channel);
-    const char* scenLabel = scenarioLabel(scenario);
+    const char* scenLabel = scenarioLabel(scenario, isolation);
+
+    TString binMode(binning);
+    bool usePtBins = (binMode == "eta_pt");
 
     gStyle->SetOptStat(0);
-    gStyle->SetPalette(88);  // kLightTerrain — Francisco's palette
-
+    gStyle->SetPalette(88);
     gROOT->SetBatch(true);
-
 
     TString outPath = Form("%s/%s/%s", baseDir, channel, scenario);
     TString corrFile = outPath + "/histograms.root";
@@ -177,17 +181,13 @@ int plot_cell_profiles(const char* channel  = "eegamma",
     if (!dir.EndsWith("/")) dir += "/";
     gSystem->mkdir(dir, true);
 
-    // Canvas: 800x600 landscape (matches Francisco's style).
-    // Plot area ~560x432px for 7x11 cells → ~80x39 px/cell.
     TCanvas* c = new TCanvas("c", "Cell Profiles", 800, 600);
 
-    // Build eta label with bin number
     auto etaLbl = [](int n) -> TString {
         return Form("Bin %d:  %.2f < |#eta| < %.2f",
                     n, kEtaLimits[n], kEtaLimits[n + 1]);
     };
 
-    // Check if a TH2D has any non-zero content
     auto nonEmpty = [](TH2D* h) -> bool {
         if (!h) return false;
         for (int i = 1; i <= h->GetNbinsX(); ++i)
@@ -196,49 +196,75 @@ int plot_cell_profiles(const char* channel  = "eegamma",
         return false;
     };
 
+    // Correction histogram suffix: eta-only or eta_pt
+    auto corrSuf = [&](int e, int p = -1) -> TString {
+        if (usePtBins && p >= 0)
+            return Form("_eta%02d_pt%02d", e, p);
+        return Form("_eta%02d", e);
+    };
+
     // ================================================================
-    // 1. cell_data.pdf — Data mean cell energy fractions
+    // Per-eta cell profile PDFs (always produced)
     // ================================================================
-    {
-        TString pdf = dir + "cell_data.pdf";
+    struct MapDef {
+        const char* fileName;
+        const char* typeLabel;
+        const char* histPat;  // pattern in cell_profiles/
+        bool isCorrHist;      // true = from corrections/ (1D -> corrTo2D)
+        bool needsM1Sum;      // true = MC + delta
+    };
+
+    MapDef maps[] = {
+        {"cell_data",    "Data",                      "h_frac_mean_data",   false, false},
+        {"cell_mc",      "Original MC",               "h_frac_mean_mc",     false, false},
+        {"cell_mc_m2",   "MC after M2 reweighting",   "h_frac_mean_mc_M2", false, false},
+        {"cell_shift",   "Shift correction",          "h_delta",            true,  false},
+        {"cell_stretch", "Stretch correction",         "h_stretch",         true,  false},
+    };
+
+    // ---- eta-only profiles ----
+    for (auto& m : maps) {
+        TString pdf = dir + Form("%s.pdf", m.fileName);
         std::cout << "Creating: " << pdf << std::endl;
         c->Print(pdf + "[");
         for (int n = 0; n < kNEtaBins; ++n) {
-            TH2D* h = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_data_eta%02d", n));
-            if (!nonEmpty(h)) continue;
-            drawCellMap(h, "Data", chLabel, etaLbl(n), scenLabel, c);
-            c->Print(pdf);
+            TString hname;
+            if (m.isCorrHist)
+                hname = Form("corrections/%s%s", m.histPat, corrSuf(n).Data());
+            else
+                hname = Form("cell_profiles/%s%s", m.histPat, corrSuf(n).Data());
+
+            if (m.isCorrHist) {
+                TH1D* h1 = (TH1D*)f->Get(hname);
+                if (!h1) continue;
+                bool ok = false;
+                for (int k = 1; k <= kClusterSize; ++k)
+                    if (h1->GetBinContent(k) != 0) { ok = true; break; }
+                if (!ok) continue;
+                TH2D* h2 = corrTo2D(h1, Form("%s_2d_%d", m.fileName, n));
+                drawCellMap(h2, m.typeLabel, chLabel, etaLbl(n), scenLabel, c);
+                c->Print(pdf);
+                delete h2;
+            } else {
+                TH2D* h = (TH2D*)f->Get(hname);
+                if (!nonEmpty(h)) continue;
+                drawCellMap(h, m.typeLabel, chLabel, etaLbl(n), scenLabel, c);
+                c->Print(pdf);
+            }
         }
         c->Print(pdf + "]");
     }
 
-    // ================================================================
-    // 2. cell_mc.pdf — MC mean cell energy fractions (original)
-    // ================================================================
-    {
-        TString pdf = dir + "cell_mc.pdf";
-        std::cout << "Creating: " << pdf << std::endl;
-        c->Print(pdf + "[");
-        for (int n = 0; n < kNEtaBins; ++n) {
-            TH2D* h = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_mc_eta%02d", n));
-            if (!nonEmpty(h)) continue;
-            drawCellMap(h, "Original MC", chLabel, etaLbl(n), scenLabel, c);
-            c->Print(pdf);
-        }
-        c->Print(pdf + "]");
-    }
-
-    // ================================================================
-    // 3. cell_mc_m1.pdf — MC after M1 (shift) reweighting
-    //    M1-corrected = MC + delta  (equals data by construction)
-    // ================================================================
+    // ---- M1 profile (MC + delta, computed on the fly) ----
     {
         TString pdf = dir + "cell_mc_m1.pdf";
         std::cout << "Creating: " << pdf << std::endl;
         c->Print(pdf + "[");
         for (int n = 0; n < kNEtaBins; ++n) {
-            TH2D* hMC    = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_mc_eta%02d",    n));
-            TH2D* hDelta = (TH2D*)f->Get(Form("cell_profiles/h_frac_delta_eta%02d",      n));
+            TH2D* hMC    = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_mc%s",
+                                               corrSuf(n).Data()));
+            TH2D* hDelta = (TH2D*)f->Get(Form("cell_profiles/h_frac_delta%s",
+                                               corrSuf(n).Data()));
             if (!nonEmpty(hMC) || !hDelta) continue;
             TH2D* hM1 = (TH2D*)hMC->Clone(Form("cellsM1_%d", n));
             hM1->Add(hDelta);
@@ -250,63 +276,64 @@ int plot_cell_profiles(const char* channel  = "eegamma",
     }
 
     // ================================================================
-    // 4. cell_mc_m2.pdf — MC after M2 (shift+stretch) reweighting
+    // Per-pT cell profile PDFs (only in eta_pt mode)
     // ================================================================
-    {
-        TString pdf = dir + "cell_mc_m2.pdf";
-        std::cout << "Creating: " << pdf << std::endl;
-        c->Print(pdf + "[");
-        for (int n = 0; n < kNEtaBins; ++n) {
-            TH2D* h = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_mc_M2_eta%02d", n));
-            if (!nonEmpty(h)) continue;
-            drawCellMap(h, "MC after M2 reweighting", chLabel, etaLbl(n), scenLabel, c);
-            c->Print(pdf);
-        }
-        c->Print(pdf + "]");
-    }
+    if (usePtBins) {
+        for (int p = 0; p < kNPtBins; ++p) {
+            const char* ptLbl = ptBinLabel(p);
 
-    // ================================================================
-    // 5. cell_shift.pdf — M1 shift correction (delta_k per cell)
-    // ================================================================
-    {
-        TString pdf = dir + "cell_shift.pdf";
-        std::cout << "Creating: " << pdf << std::endl;
-        c->Print(pdf + "[");
-        for (int n = 0; n < kNEtaBins; ++n) {
-            TH1D* h1 = (TH1D*)f->Get(Form("corrections/h_delta_eta%02d", n));
-            if (!h1) continue;
-            bool ok = false;
-            for (int k = 1; k <= kClusterSize; ++k)
-                if (h1->GetBinContent(k) != 0) { ok = true; break; }
-            if (!ok) continue;
-            TH2D* h2 = corrTo2D(h1, Form("shift2d_%d", n));
-            drawCellMap(h2, "Shift correction", chLabel, etaLbl(n), scenLabel, c);
-            c->Print(pdf);
-            delete h2;
-        }
-        c->Print(pdf + "]");
-    }
+            for (auto& m : maps) {
+                TString pdf = dir + Form("%s_pt%02d.pdf", m.fileName, p);
+                std::cout << "Creating: " << pdf << std::endl;
+                c->Print(pdf + "[");
+                for (int n = 0; n < kNEtaBins; ++n) {
+                    TString hname;
+                    TString suf = corrSuf(n, p);
+                    if (m.isCorrHist)
+                        hname = Form("corrections/%s%s", m.histPat, suf.Data());
+                    else
+                        hname = Form("cell_profiles/%s%s", m.histPat, suf.Data());
 
-    // ================================================================
-    // 6. cell_stretch.pdf — M2 stretch correction (sigma_d/sigma_MC)
-    // ================================================================
-    {
-        TString pdf = dir + "cell_stretch.pdf";
-        std::cout << "Creating: " << pdf << std::endl;
-        c->Print(pdf + "[");
-        for (int n = 0; n < kNEtaBins; ++n) {
-            TH1D* h1 = (TH1D*)f->Get(Form("corrections/h_stretch_eta%02d", n));
-            if (!h1) continue;
-            bool ok = false;
-            for (int k = 1; k <= kClusterSize; ++k)
-                if (h1->GetBinContent(k) != 0) { ok = true; break; }
-            if (!ok) continue;
-            TH2D* h2 = corrTo2D(h1, Form("stretch2d_%d", n));
-            drawCellMap(h2, "Stretch correction", chLabel, etaLbl(n), scenLabel, c);
-            c->Print(pdf);
-            delete h2;
+                    if (m.isCorrHist) {
+                        TH1D* h1 = (TH1D*)f->Get(hname);
+                        if (!h1) continue;
+                        bool ok = false;
+                        for (int k = 1; k <= kClusterSize; ++k)
+                            if (h1->GetBinContent(k) != 0) { ok = true; break; }
+                        if (!ok) continue;
+                        TH2D* h2 = corrTo2D(h1, Form("%s_pt%d_2d_%d", m.fileName, p, n));
+                        drawCellMap(h2, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                        c->Print(pdf);
+                        delete h2;
+                    } else {
+                        TH2D* h = (TH2D*)f->Get(hname);
+                        if (!nonEmpty(h)) continue;
+                        drawCellMap(h, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                        c->Print(pdf);
+                    }
+                }
+                c->Print(pdf + "]");
+            }
+
+            // M1 per-pT
+            {
+                TString pdf = dir + Form("cell_mc_m1_pt%02d.pdf", p);
+                std::cout << "Creating: " << pdf << std::endl;
+                c->Print(pdf + "[");
+                for (int n = 0; n < kNEtaBins; ++n) {
+                    TString suf = corrSuf(n, p);
+                    TH2D* hMC    = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_mc%s", suf.Data()));
+                    TH2D* hDelta = (TH2D*)f->Get(Form("cell_profiles/h_frac_delta%s", suf.Data()));
+                    if (!nonEmpty(hMC) || !hDelta) continue;
+                    TH2D* hM1 = (TH2D*)hMC->Clone(Form("cellsM1_pt%d_%d", p, n));
+                    hM1->Add(hDelta);
+                    drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                    c->Print(pdf);
+                    delete hM1;
+                }
+                c->Print(pdf + "]");
+            }
         }
-        c->Print(pdf + "]");
     }
 
     f->Close();

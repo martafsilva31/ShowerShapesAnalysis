@@ -90,7 +90,7 @@ namespace config {
         bool   requireTruthMC  = false;     // Francisco: no truth cut
     };
 
-    inline Selection baselineSelection() {
+    inline Selection unconvertedSelection() {
         return Selection{};
     }
 
@@ -154,7 +154,7 @@ namespace config {
     }
 
     inline Selection getSelection(const std::string& name) {
-        if (name == "baseline")            return baselineSelection();
+        if (name == "unconverted")            return unconvertedSelection();
         if (name == "converted")           return convertedSelection();
         if (name == "all_conv")            return allConvSelection();
         if (name == "tight_id")            return tightIDSelection();
@@ -164,7 +164,7 @@ namespace config {
         if (name == "iso_tight_converted")   return isoTightConvertedSelection();
         if (name == "iso_tight_all_conv")    return isoTightAllConvSelection();
         std::cerr << "ERROR: Unknown scenario '" << name << "'" << std::endl;
-        return baselineSelection();
+        return unconvertedSelection();
     }
 
     // ======================================================================
@@ -178,17 +178,33 @@ namespace config {
         return channel;
     }
 
-    inline const char* scenarioLabel(const char* scenario) {
+    inline const char* scenarioLabel(const char* scenario,
+                                       const char* isolation = "loose") {
         TString sc(scenario);
-        if (sc == "baseline")    return "Unconverted #gamma, no ID, loose iso";
-        if (sc == "converted")   return "Converted #gamma, no ID, loose iso";
-        if (sc == "all_conv")    return "All #gamma, no ID, loose iso";
-        if (sc == "tight_id")    return "Unconverted #gamma, tight ID, loose iso";
-        if (sc == "iso_tight")             return "Unconverted #gamma, no ID, tight iso";
-        if (sc == "iso_tight_converted")   return "Converted #gamma, no ID, tight iso";
-        if (sc == "iso_tight_all_conv")    return "All #gamma, no ID, tight iso";
-        if (sc == "no_iso")                return "Unconverted #gamma, no ID, no iso";
-        return scenario;
+        TString iso(isolation);
+        TString isoLabel = (iso == "tight") ? "tight iso" : "loose iso";
+
+        // Build label: <conversion> #gamma, no ID, <isolation>
+        static TString buf;  // static to survive return
+        if      (sc == "unconverted") buf = Form("Unconverted #gamma, no ID, %s", isoLabel.Data());
+        else if (sc == "converted")   buf = Form("Converted #gamma, no ID, %s",   isoLabel.Data());
+        else if (sc == "inclusive")    buf = Form("Inclusive #gamma, no ID, %s",    isoLabel.Data());
+        else if (sc == "all_conv")    buf = Form("All #gamma, no ID, %s",          isoLabel.Data());
+        else if (sc == "tight_id")    buf = Form("Unconverted #gamma, tight ID, %s", isoLabel.Data());
+        else if (sc == "no_iso")      buf = "Unconverted #gamma, no ID, no iso";
+        else                          buf = scenario;
+        return buf.Data();
+    }
+
+    // pT bin label for plots: "10 < p_{T} < 15 GeV"
+    inline const char* ptBinLabel(int ptBin) {
+        static TString buf;
+        if (ptBin < 0 || ptBin >= kNPtBins) { buf = ""; return buf.Data(); }
+        if (kPtLimits[ptBin + 1] >= 999)
+            buf = Form("p_{T} > %.0f GeV", kPtLimits[ptBin]);
+        else
+            buf = Form("%.0f < p_{T} < %.0f GeV", kPtLimits[ptBin], kPtLimits[ptBin + 1]);
+        return buf.Data();
     }
 
     // ======================================================================

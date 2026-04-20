@@ -3,14 +3,21 @@
 //
 // Two-pass pipeline for cell-energy reweighting corrections.
 //
-//   Pass 1: Loop data + MC → accumulate per-cell fraction statistics,
+//   Pass 1: Loop data + MC -> accumulate per-cell fraction statistics,
 //           fill uncorrected shower-shape histograms.
-//   Pass 2: Loop MC only   → apply M1 (flat shift) and M2 (shift+stretch)
+//   Pass 2: Loop MC only   -> apply M1 (flat shift) and M2 (shift+stretch)
 //           corrections, fill corrected shower-shape histograms.
 //
+// Parameters:
+//   channel   "eegamma", "mumugamma", or "llgamma"
+//   scenario  conversion scenario: "unconverted", "converted", etc.
+//   baseDir   output base directory
+//   binning   "eta" (14 eta bins, default) or "eta_pt" (14 eta x 6 pT bins)
+//   isolation "loose" (default) or "tight"
+//
 // Usage:
-//   root -l -b -q 'fill_histograms.C("eegamma", "baseline")'
-//   root -l -b -q 'fill_histograms.C("mumugamma", "tight_id")'
+//   root -l -b -q 'fill_histograms.C("llgamma", "unconverted", "../../output/Layer_2/eta_loose")'
+//   root -l -b -q 'fill_histograms.C("llgamma", "unconverted", "../../output/Layer_2/eta_pt_tight", "eta_pt", "tight")'
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "config.h"
@@ -32,7 +39,7 @@ using namespace config;
 // Shower-shape histogram helpers
 // ============================================================
 const int kNBins = 100;
-const bool kExcludeZeroPadFromCorr = true;  // skip zero-padded events in correction derivation
+const bool kExcludeZeroPadFromCorr = false;
 enum SS { kReta = 0, kRphi = 1, kWeta2 = 2, kNSS = 3 };
 static const char* ssName[kNSS]  = {"reta", "rphi", "weta2"};
 static const char* ssTitle[kNSS] = {"R_{#eta}", "R_{#phi}", "w_{#eta 2}"};
@@ -46,24 +53,42 @@ TH1D* makeSS(int iss, const char* tag, const char* suf = "") {
 }
 
 // ============================================================
-// Correction storage
+// Correction storage — supports 2D (eta, pT) binning
 // ============================================================
 struct Corrections {
-    double delta  [kNEtaBins][kClusterSize] = {};   // M1
-    double shift  [kNEtaBins][kClusterSize] = {};   // M2
-    double stretch[kNEtaBins][kClusterSize] = {};   // M2
+    double delta  [kNEtaBins][kNPtBins][kClusterSize] = {};   // M1
+    double shift  [kNEtaBins][kNPtBins][kClusterSize] = {};   // M2
+    double stretch[kNEtaBins][kNPtBins][kClusterSize] = {};   // M2
 };
 
 // ============================================================
 // Main
 // ============================================================
-void fill_histograms(const char* channel  = "eegamma",
-                     const char* scenario = "baseline",
-                     const char* baseDir  =
-                         "../../output/cell_energy_reweighting_Francisco_method/data24",
-                     const char* selectionOverride = "") {
+void fill_histograms(const char* channel   = "eegamma",
+                     const char* scenario  = "unconverted",
+                     const char* baseDir   = "../../output/Layer_2/eta_loose",
+                     const char* binning   = "eta",
+                     const char* isolation = "loose") {
 
     TH1::SetDefaultSumw2(true);
+
+    // --------------------------------------------------------
+    // Determine binning mode
+    // --------------------------------------------------------
+    TString binMode(binning);
+    bool usePtBins = (binMode == "eta_pt");
+    int nPtUsed = usePtBins ? kNPtBins : 1;  // 1 = eta-only mode
+
+    // --------------------------------------------------------
+    // Apply isolation override to selection
+    // --------------------------------------------------------
+    Selection sel = getSelection(scenario);
+    TString isoMode(isolation);
+    if (isoMode == "tight") {
+        sel.requireTightIso = true;
+        sel.requireLooseIso = false;
+    }
+    // else: loose is the default from getSelection
 
     // --------------------------------------------------------
     // Input files
@@ -82,9 +107,6 @@ void fill_histograms(const char* channel  = "eegamma",
         return;
     }
 
-    Selection sel = getSelection(
-        (strlen(selectionOverride) > 0) ? selectionOverride : scenario);
-
     // --------------------------------------------------------
     // Output
     // --------------------------------------------------------
@@ -94,11 +116,13 @@ void fill_histograms(const char* channel  = "eegamma",
     TFile* fout = TFile::Open(outFile, "RECREATE");
 
     std::cout << "=== fill_histograms ===\n"
-              << "  channel  = " << channel  << "\n"
-              << "  scenario = " << scenario << "\n"
-              << "  data     = " << dataF    << "\n"
-              << "  mc       = " << mcF      << "\n"
-              << "  output   = " << outFile  << "\n";
+              << "  channel   = " << channel   << "\n"
+              << "  scenario  = " << scenario  << "\n"
+              << "  binning   = " << binning   << " (" << nPtUsed << " pT bins)\n"
+              << "  isolation = " << isolation  << "\n"
+              << "  data      = " << dataF     << "\n"
+              << "  mc        = " << mcF       << "\n"
+              << "  output    = " << outFile   << "\n";
 
     // ============================================================
     //  CREATE HISTOGRAMS
@@ -119,12 +143,14 @@ void fill_histograms(const char* channel  = "eegamma",
     }
 
     // --- Per-eta bin ---
-    TH1D *h_d_eta[kNSS][kNEtaBins];   // cell-computed data
-    TH1D *h_m_eta[kNSS][kNEtaBins];   // cell-computed MC
+    TH1D *h_d_eta[kNSS][kNEtaBins];
+    TH1D *h_m_eta[kNSS][kNEtaBins];
     TH1D *h_m_M1_eta[kNSS][kNEtaBins];
     TH1D *h_m_M2_eta[kNSS][kNEtaBins];
-    TH1D *h_d_stor_eta[kNSS][kNEtaBins];  // branch-stored data (per-eta)
-    TH1D *h_m_fudg_eta[kNSS][kNEtaBins];  // fudged MC (per-eta)
+    TH1D *h_d_stor_eta[kNSS][kNEtaBins];
+    TH1D *h_m_fudg_eta[kNSS][kNEtaBins];
+    TH1D *h_m_unf_eta[kNSS][kNEtaBins];
+    fout->cd();
     for (int s = 0; s < kNSS; ++s)
         for (int e = 0; e < kNEtaBins; ++e) {
             TString suf = Form("_eta%02d", e);
@@ -134,7 +160,32 @@ void fill_histograms(const char* channel  = "eegamma",
             h_m_M2_eta[s][e]   = makeSS(s, "mc_M2",        suf.Data());
             h_d_stor_eta[s][e] = makeSS(s, "data_stored",  suf.Data());
             h_m_fudg_eta[s][e] = makeSS(s, "mc_fudged",    suf.Data());
+            h_m_unf_eta[s][e]  = makeSS(s, "mc_unfudged",  suf.Data());
         }
+
+    // --- Per-(eta, pT) bin (only created in eta_pt mode) ---
+    TH1D *h_d_etapt[kNSS][kNEtaBins][kNPtBins];
+    TH1D *h_m_etapt[kNSS][kNEtaBins][kNPtBins];
+    TH1D *h_m_M1_etapt[kNSS][kNEtaBins][kNPtBins];
+    TH1D *h_m_M2_etapt[kNSS][kNEtaBins][kNPtBins];
+    TH1D *h_d_stor_etapt[kNSS][kNEtaBins][kNPtBins];
+    TH1D *h_m_fudg_etapt[kNSS][kNEtaBins][kNPtBins];
+    TH1D *h_m_unf_etapt[kNSS][kNEtaBins][kNPtBins];
+    if (usePtBins) {
+        fout->cd();
+        for (int s = 0; s < kNSS; ++s)
+            for (int e = 0; e < kNEtaBins; ++e)
+                for (int p = 0; p < kNPtBins; ++p) {
+                    TString suf = Form("_eta%02d_pt%02d", e, p);
+                    h_d_etapt[s][e][p]      = makeSS(s, "data",         suf.Data());
+                    h_m_etapt[s][e][p]      = makeSS(s, "mc",           suf.Data());
+                    h_m_M1_etapt[s][e][p]   = makeSS(s, "mc_M1",        suf.Data());
+                    h_m_M2_etapt[s][e][p]   = makeSS(s, "mc_M2",        suf.Data());
+                    h_d_stor_etapt[s][e][p] = makeSS(s, "data_stored",  suf.Data());
+                    h_m_fudg_etapt[s][e][p] = makeSS(s, "mc_fudged",    suf.Data());
+                    h_m_unf_etapt[s][e][p]  = makeSS(s, "mc_unfudged",  suf.Data());
+                }
+    }
 
     // --- Event counts per eta bin ---
     TH1D* h_cnt_d = new TH1D("h_counts_data",
@@ -146,50 +197,64 @@ void fill_histograms(const char* channel  = "eegamma",
 
     // --- pT and eta distributions ---
     TH1D* h_pt_d = new TH1D("h_pt_data",
-        "Photon p_{T} (data);p_{T} [GeV];Events / 2 GeV",
-        50, 0, 100);
+        "Photon p_{T} (data);p_{T} [GeV];Events / 2 GeV", 50, 0, 100);
     TH1D* h_pt_m = new TH1D("h_pt_mc",
-        "Photon p_{T} (MC);p_{T} [GeV];Events / 2 GeV",
-        50, 0, 100);
+        "Photon p_{T} (MC);p_{T} [GeV];Events / 2 GeV", 50, 0, 100);
     TH1D* h_eta_d = new TH1D("h_eta_data",
-        "Photon |#eta| (data);|#eta|;Events",
-        48, 0, 2.4);
+        "Photon |#eta| (data);|#eta|;Events", 48, 0, 2.4);
     TH1D* h_eta_m = new TH1D("h_eta_mc",
-        "Photon |#eta| (MC);|#eta|;Events",
-        48, 0, 2.4);
+        "Photon |#eta| (MC);|#eta|;Events", 48, 0, 2.4);
     TH1D* h_pt_m_nosf = new TH1D("h_pt_mc_nosf",
-        "Photon p_{T} (MC, no SFs);p_{T} [GeV];Events / 2 GeV",
-        50, 0, 100);
+        "Photon p_{T} (MC, no SFs);p_{T} [GeV];Events / 2 GeV", 50, 0, 100);
     TH1D* h_eta_m_nosf = new TH1D("h_eta_mc_nosf",
-        "Photon |#eta| (MC, no SFs);|#eta|;Events",
-        48, 0, 2.4);
+        "Photon |#eta| (MC, no SFs);|#eta|;Events", 48, 0, 2.4);
 
     // --- Zero-padding diagnostics ---
     Long64_t nZeroPad_d = 0, nTotal_d = 0;
     Long64_t nZeroPad_m = 0, nTotal_m = 0;
     TH1D* h_nzero_d = new TH1D("h_nzero_data",
-        "Cells with E=0 per event (data);N_{zero};Events",
-        78, 0, 78);
+        "Cells with E=0 per event (data);N_{zero};Events", 78, 0, 78);
     TH1D* h_nzero_m = new TH1D("h_nzero_mc",
-        "Cells with E=0 per event (MC);N_{zero};Events",
-        78, 0, 78);
+        "Cells with E=0 per event (MC);N_{zero};Events", 78, 0, 78);
 
     // ============================================================
     //  ACCUMULATION ARRAYS  (Pass 1)
+    //  Dimensions: [eta][pT][cell]   (pT dim = 1 for eta-only)
     // ============================================================
-    double sf_d [kNEtaBins][kClusterSize] = {};   // sum f_k      (data)
-    double sf2_d[kNEtaBins][kClusterSize] = {};   // sum f_k^2    (data)
-    double cnt_d[kNEtaBins]               = {};   // count        (data)
+    double sf_d [kNEtaBins][kNPtBins][kClusterSize] = {};
+    double cnt_d[kNEtaBins][kNPtBins]               = {};
+    double swf_m [kNEtaBins][kNPtBins][kClusterSize] = {};
+    double sw_m  [kNEtaBins][kNPtBins]               = {};
 
-    double swf_m [kNEtaBins][kClusterSize] = {};  // sum w*f_k    (MC)
-    double swf2_m[kNEtaBins][kClusterSize] = {};  // sum w*f_k^2  (MC)
-    double sw_m  [kNEtaBins]               = {};  // sum w        (MC)
+    // M2: per-cell TH1D for histogram-based sigma
+    const int kCellBins = 100;
+    TH1D* h_frac_d[kNEtaBins][kNPtBins][kClusterSize];
+    TH1D* h_frac_m[kNEtaBins][kNPtBins][kClusterSize];
+    for (int e = 0; e < kNEtaBins; ++e) {
+        for (int p = 0; p < nPtUsed; ++p) {
+            for (int k = 0; k < kClusterSize; ++k) {
+                double fLo = -0.1, fHi = 0.2;
+                if (k == kCentralCell)                                    fHi = 1.0;
+                else if (k == 27 || k == 37 || k == 39 || k == 49)       fHi = 0.5;
+                else if (k == 26 || k == 28 || k == 48 || k == 50)       fHi = 0.3;
 
-    double swf_m2[kNEtaBins][kClusterSize] = {};  // sum w*f_k    (MC M2-corrected)
-    double sw_m2 [kNEtaBins]               = {};  // sum w        (MC M2-corrected)
+                h_frac_d[e][p][k] = new TH1D(
+                    Form("h_frac_d_eta%02d_pt%02d_cell%02d", e, p, k), "",
+                    kCellBins, fLo, fHi);
+                h_frac_m[e][p][k] = new TH1D(
+                    Form("h_frac_m_eta%02d_pt%02d_cell%02d", e, p, k), "",
+                    kCellBins, fLo, fHi);
+                h_frac_d[e][p][k]->SetDirectory(nullptr);
+                h_frac_m[e][p][k]->SetDirectory(nullptr);
+            }
+        }
+    }
+
+    double swf_m2[kNEtaBins][kNPtBins][kClusterSize] = {};
+    double sw_m2 [kNEtaBins][kNPtBins]               = {};
 
     // ============================================================
-    //  BRANCH VARIABLES  (reused across chains)
+    //  BRANCH VARIABLES
     // ============================================================
     Float_t phPt, phEta, phPhi;
     Float_t clE, clEta2, clEtaMax2;
@@ -238,11 +303,17 @@ void fill_histograms(const char* channel  = "eegamma",
         t->SetBranchAddress(kWeta2UnfBranch,    &vweta2U);
         t->SetBranchAddress(kLepton1SFBranch,   &vl1sf);
         t->SetBranchAddress(kLepton2SFBranch,   &vl2sf);
-        t->SetBranchAddress(kPhotonIsoSFBranch,  &vphIsosf);
+        t->SetBranchAddress(kPhotonIsoSFBranch, &vphIsosf);
+    };
+
+    // Helper: get pT bin index (0 for eta-only mode)
+    auto getPtBin = [&](double pt) -> int {
+        if (!usePtBins) return 0;
+        return findPtBin(pt);
     };
 
     // ============================================================
-    //  PASS 1 — DATA
+    //  PASS 1 -- DATA
     // ============================================================
     {
         TChain* td = makeChain(dataF);
@@ -266,7 +337,6 @@ void fill_histograms(const char* channel  = "eegamma",
             std::vector<double> cells(vcellE->begin(), vcellE->end());
             if (!isHealthyCluster(cells)) continue;
 
-            // Zero-padding diagnostic
             int nzero = 0;
             for (int k = 0; k < kClusterSize; ++k)
                 if (k != kCentralCell && cells[k] == 0.0) ++nzero;
@@ -277,7 +347,6 @@ void fill_histograms(const char* channel  = "eegamma",
             double Etot = 0;
             for (int k = 0; k < kClusterSize; ++k) Etot += cells[k];
 
-            // pT and eta distributions
             h_pt_d->Fill(phPt);
             h_eta_d->Fill(std::fabs(clEta2));
 
@@ -293,23 +362,35 @@ void fill_histograms(const char* channel  = "eegamma",
             h_d_stor[kWeta2]->Fill(vweta2);
 
             int eb = findEtaBin(std::fabs(clEta2));
-            if (eb >= 0) {
-                h_d_eta[kReta][eb]->Fill(rc);
-                h_d_eta[kRphi][eb]->Fill(pc);
-                h_d_eta[kWeta2][eb]->Fill(wc);
-                h_d_stor_eta[kReta][eb]->Fill(vreta);
-                h_d_stor_eta[kRphi][eb]->Fill(vrphi);
-                h_d_stor_eta[kWeta2][eb]->Fill(vweta2);
+            int pb = getPtBin(phPt);
+            if (eb < 0 || pb < 0) continue;
 
-                if (!kExcludeZeroPadFromCorr || nzero == 0) {
-                    for (int k = 0; k < kClusterSize; ++k) {
-                        double fk = cells[k] / Etot;
-                        sf_d [eb][k] += fk;
-                        sf2_d[eb][k] += fk * fk;
-                    }
-                    cnt_d[eb] += 1.0;
-                }
+            h_d_eta[kReta][eb]->Fill(rc);
+            h_d_eta[kRphi][eb]->Fill(pc);
+            h_d_eta[kWeta2][eb]->Fill(wc);
+            h_d_stor_eta[kReta][eb]->Fill(vreta);
+            h_d_stor_eta[kRphi][eb]->Fill(vrphi);
+            h_d_stor_eta[kWeta2][eb]->Fill(vweta2);
+
+            if (usePtBins) {
+                h_d_etapt[kReta][eb][pb]->Fill(rc);
+                h_d_etapt[kRphi][eb][pb]->Fill(pc);
+                h_d_etapt[kWeta2][eb][pb]->Fill(wc);
+                h_d_stor_etapt[kReta][eb][pb]->Fill(vreta);
+                h_d_stor_etapt[kRphi][eb][pb]->Fill(vrphi);
+                h_d_stor_etapt[kWeta2][eb][pb]->Fill(vweta2);
             }
+
+            if (!kExcludeZeroPadFromCorr || nzero == 0) {
+                for (int k = 0; k < kClusterSize; ++k) {
+                    double fk = cells[k] / Etot;
+                    sf_d [eb][pb][k] += fk;
+                    h_frac_d[eb][pb][k]->Fill(fk);
+                }
+                cnt_d[eb][pb] += 1.0;
+            }
+
+            h_cnt_d->Fill(eb);
             ++nPass;
         }
         std::cout << "  Data passing: " << nPass << "\n";
@@ -317,9 +398,8 @@ void fill_histograms(const char* channel  = "eegamma",
     }
 
     // ============================================================
-    //  PASS 1 — MC
+    //  PASS 1 -- MC
     // ============================================================
-    // Sum-of-weights from h_sumW histogram (bin 2) in the MC ntuple files
     auto sumWmap = computeSumWeightsFromFiles(mcF);
     {
         TChain* tm = makeChain(mcF);
@@ -343,7 +423,6 @@ void fill_histograms(const char* channel  = "eegamma",
             std::vector<double> cells(vcellE->begin(), vcellE->end());
             if (!isHealthyCluster(cells)) continue;
 
-            // Zero-padding diagnostic
             int nzero = 0;
             for (int k = 0; k < kClusterSize; ++k)
                 if (k != kCentralCell && cells[k] == 0.0) ++nzero;
@@ -357,7 +436,6 @@ void fill_histograms(const char* channel  = "eegamma",
             double Etot = 0;
             for (int k = 0; k < kClusterSize; ++k) Etot += cells[k];
 
-            // pT and eta distributions
             h_pt_m->Fill(phPt, w);
             h_eta_m->Fill(std::fabs(clEta2), w);
             h_pt_m_nosf->Fill(phPt, w_nosf);
@@ -378,23 +456,41 @@ void fill_histograms(const char* channel  = "eegamma",
             h_m_unf[kWeta2]->Fill(vweta2U, w);
 
             int eb = findEtaBin(std::fabs(clEta2));
-            if (eb >= 0) {
-                h_m_eta[kReta][eb]->Fill(rc, w);
-                h_m_eta[kRphi][eb]->Fill(pc, w);
-                h_m_eta[kWeta2][eb]->Fill(wc, w);
-                h_m_fudg_eta[kReta][eb]->Fill(vreta, w);
-                h_m_fudg_eta[kRphi][eb]->Fill(vrphi, w);
-                h_m_fudg_eta[kWeta2][eb]->Fill(vweta2, w);
+            int pb = getPtBin(phPt);
+            if (eb < 0 || pb < 0) continue;
 
-                if (!kExcludeZeroPadFromCorr || nzero == 0) {
-                    for (int k = 0; k < kClusterSize; ++k) {
-                        double fk = cells[k] / Etot;
-                        swf_m [eb][k] += w * fk;
-                        swf2_m[eb][k] += w * fk * fk;
-                    }
-                    sw_m[eb] += w;
-                }
+            h_m_eta[kReta][eb]->Fill(rc, w);
+            h_m_eta[kRphi][eb]->Fill(pc, w);
+            h_m_eta[kWeta2][eb]->Fill(wc, w);
+            h_m_fudg_eta[kReta][eb]->Fill(vreta, w);
+            h_m_fudg_eta[kRphi][eb]->Fill(vrphi, w);
+            h_m_fudg_eta[kWeta2][eb]->Fill(vweta2, w);
+            h_m_unf_eta[kReta][eb]->Fill(vretaU, w);
+            h_m_unf_eta[kRphi][eb]->Fill(vrphiU, w);
+            h_m_unf_eta[kWeta2][eb]->Fill(vweta2U, w);
+
+            if (usePtBins) {
+                h_m_etapt[kReta][eb][pb]->Fill(rc, w);
+                h_m_etapt[kRphi][eb][pb]->Fill(pc, w);
+                h_m_etapt[kWeta2][eb][pb]->Fill(wc, w);
+                h_m_fudg_etapt[kReta][eb][pb]->Fill(vreta, w);
+                h_m_fudg_etapt[kRphi][eb][pb]->Fill(vrphi, w);
+                h_m_fudg_etapt[kWeta2][eb][pb]->Fill(vweta2, w);
+                h_m_unf_etapt[kReta][eb][pb]->Fill(vretaU, w);
+                h_m_unf_etapt[kRphi][eb][pb]->Fill(vrphiU, w);
+                h_m_unf_etapt[kWeta2][eb][pb]->Fill(vweta2U, w);
             }
+
+            if (!kExcludeZeroPadFromCorr || nzero == 0) {
+                for (int k = 0; k < kClusterSize; ++k) {
+                    double fk = cells[k] / Etot;
+                    swf_m [eb][pb][k] += w * fk;
+                    h_frac_m[eb][pb][k]->Fill(fk, w);
+                }
+                sw_m[eb][pb] += w;
+            }
+
+            h_cnt_m->Fill(eb, w);
             ++nPass;
         }
         std::cout << "  MC passing: " << nPass << "\n";
@@ -418,53 +514,58 @@ void fill_histograms(const char* channel  = "eegamma",
 
     std::cout << "\n--- Computing corrections ---\n";
     for (int e = 0; e < kNEtaBins; ++e) {
-        std::cout << Form("  eta bin %2d  [%.2f, %.2f)  data=%6.0f  MC_wt=%.1f",
-                          e, kEtaLimits[e], kEtaLimits[e + 1],
-                          cnt_d[e], sw_m[e]) << "\n";
+        for (int p = 0; p < nPtUsed; ++p) {
+            TString binLabel;
+            if (usePtBins)
+                binLabel = Form("  eta %2d [%.2f,%.2f) pT %d [%.0f,%.0f)  data=%6.0f  MC_wt=%.1f",
+                    e, kEtaLimits[e], kEtaLimits[e+1],
+                    p, kPtLimits[p], kPtLimits[p+1],
+                    cnt_d[e][p], sw_m[e][p]);
+            else
+                binLabel = Form("  eta %2d [%.2f,%.2f)  data=%6.0f  MC_wt=%.1f",
+                    e, kEtaLimits[e], kEtaLimits[e+1],
+                    cnt_d[e][p], sw_m[e][p]);
+            std::cout << binLabel << "\n";
 
-        h_cnt_d->SetBinContent(e + 1, cnt_d[e]);
-        h_cnt_m->SetBinContent(e + 1, sw_m[e]);
+            if (cnt_d[e][p] < 10 || sw_m[e][p] < 10) {
+                std::cout << "    -> too few events, skipping corrections\n";
+                continue;
+            }
 
-        if (cnt_d[e] < 10 || sw_m[e] < 10) {
-            std::cout << "    -> too few events, skipping corrections\n";
-            continue;
-        }
+            TString suffix = usePtBins ? Form("_eta%02d_pt%02d", e, p)
+                                       : Form("_eta%02d", e);
 
-        TH1D* hd = new TH1D(Form("h_delta_eta%02d", e),
-            Form("M1 #Delta  #eta bin %d;cell;#Delta", e),
-            kClusterSize, 0, kClusterSize);
-        TH1D* hs = new TH1D(Form("h_shift_eta%02d", e),
-            Form("M2 shift  #eta bin %d;cell;shift", e),
-            kClusterSize, 0, kClusterSize);
-        TH1D* ht = new TH1D(Form("h_stretch_eta%02d", e),
-            Form("M2 stretch  #eta bin %d;cell;stretch", e),
-            kClusterSize, 0, kClusterSize);
+            TH1D* hd = new TH1D(Form("h_delta%s", suffix.Data()),
+                Form("M1 #Delta  %s;cell;#Delta", suffix.Data()),
+                kClusterSize, 0, kClusterSize);
+            TH1D* hs = new TH1D(Form("h_shift%s", suffix.Data()),
+                Form("M2 shift  %s;cell;shift", suffix.Data()),
+                kClusterSize, 0, kClusterSize);
+            TH1D* ht = new TH1D(Form("h_stretch%s", suffix.Data()),
+                Form("M2 stretch  %s;cell;stretch", suffix.Data()),
+                kClusterSize, 0, kClusterSize);
 
-        for (int k = 0; k < kClusterSize; ++k) {
-            double mu_d  = sf_d[e][k]  / cnt_d[e];
-            double mu_m  = swf_m[e][k] / sw_m[e];
-            double var_d = sf2_d[e][k] / cnt_d[e] - mu_d * mu_d;
-            double var_m = swf2_m[e][k] / sw_m[e] - mu_m * mu_m;
-            double sig_d = (var_d > 0) ? std::sqrt(var_d) : 0;
-            double sig_m = (var_m > 0) ? std::sqrt(var_m) : 0;
+            for (int k = 0; k < kClusterSize; ++k) {
+                double mu_d  = sf_d[e][p][k]  / cnt_d[e][p];
+                double mu_m  = swf_m[e][p][k] / sw_m[e][p];
+                double sig_d = h_frac_d[e][p][k]->GetRMS();
+                double sig_m = h_frac_m[e][p][k]->GetRMS();
 
-            // M1: flat shift
-            corr.delta[e][k] = mu_d - mu_m;
+                corr.delta[e][p][k] = mu_d - mu_m;
 
-            // M2: shift + stretch
-            double str = (sig_m > 1e-12) ? sig_d / sig_m : 1.0;
-            if (mu_m < kMinFracForM2) str = 1.0;  // peripheral cell: fall back to M1
-            corr.stretch[e][k] = str;
-            corr.shift[e][k]   = mu_d - str * mu_m;
+                double str = (sig_m > 1e-12) ? sig_d / sig_m : 1.0;
+                corr.stretch[e][p][k] = str;
+                corr.shift[e][p][k]   = mu_d - str * mu_m;
 
-            hd->SetBinContent(k + 1, corr.delta[e][k]);
-            hs->SetBinContent(k + 1, corr.shift[e][k]);
-            ht->SetBinContent(k + 1, corr.stretch[e][k]);
+                hd->SetBinContent(k + 1, corr.delta[e][p][k]);
+                hs->SetBinContent(k + 1, corr.shift[e][p][k]);
+                ht->SetBinContent(k + 1, corr.stretch[e][p][k]);
+            }
         }
     }
 
     // ============================================================
-    //  PASS 2 — MC  (apply corrections)
+    //  PASS 2 -- MC  (apply corrections)
     // ============================================================
     fout->cd();
     {
@@ -495,12 +596,13 @@ void fill_histograms(const char* channel  = "eegamma",
             for (int k = 0; k < kClusterSize; ++k) Etot += cells[k];
 
             int eb = findEtaBin(std::fabs(clEta2));
-            if (eb < 0) continue;
+            int pb = getPtBin(phPt);
+            if (eb < 0 || pb < 0) continue;
 
             // ---- M1: flat shift ----
             std::vector<double> c1(kClusterSize);
             for (int k = 0; k < kClusterSize; ++k)
-                c1[k] = cells[k] + corr.delta[eb][k] * Etot;
+                c1[k] = cells[k] + corr.delta[eb][pb][k] * Etot;
 
             double r1 = calcReta(c1);
             double p1 = calcRphi(c1);
@@ -513,13 +615,18 @@ void fill_histograms(const char* channel  = "eegamma",
             h_m_M1_eta[kRphi][eb]->Fill(p1, w);
             h_m_M1_eta[kWeta2][eb]->Fill(w1, w);
 
+            if (usePtBins) {
+                h_m_M1_etapt[kReta][eb][pb]->Fill(r1, w);
+                h_m_M1_etapt[kRphi][eb][pb]->Fill(p1, w);
+                h_m_M1_etapt[kWeta2][eb][pb]->Fill(w1, w);
+            }
+
             // ---- M2: shift + stretch ----
             std::vector<double> c2(kClusterSize);
             for (int k = 0; k < kClusterSize; ++k)
-                c2[k] = Etot * corr.shift[eb][k]
-                       + corr.stretch[eb][k] * cells[k];
+                c2[k] = Etot * corr.shift[eb][pb][k]
+                       + corr.stretch[eb][pb][k] * cells[k];
 
-            // Rescale to conserve total energy
             double Ecorr = 0;
             for (int k = 0; k < kClusterSize; ++k) Ecorr += c2[k];
             if (Ecorr > 0) {
@@ -538,12 +645,18 @@ void fill_histograms(const char* channel  = "eegamma",
             h_m_M2_eta[kRphi][eb]->Fill(p2, w);
             h_m_M2_eta[kWeta2][eb]->Fill(w2, w);
 
+            if (usePtBins) {
+                h_m_M2_etapt[kReta][eb][pb]->Fill(r2, w);
+                h_m_M2_etapt[kRphi][eb][pb]->Fill(p2, w);
+                h_m_M2_etapt[kWeta2][eb][pb]->Fill(w2, w);
+            }
+
             // Accumulate M2-corrected cell fractions for cell profile map
             for (int k = 0; k < kClusterSize; ++k) {
-                double fk = c2[k] / Etot;   // Etot preserved by rescaling
-                swf_m2[eb][k] += w * fk;
+                double fk = c2[k] / Etot;
+                swf_m2[eb][pb][k] += w * fk;
             }
-            sw_m2[eb] += w;
+            sw_m2[eb][pb] += w;
 
             ++nPass;
         }
@@ -552,20 +665,35 @@ void fill_histograms(const char* channel  = "eegamma",
     }
 
     // ============================================================
-    //  CELL PROFILES — TH2D heatmaps
+    //  CELL PROFILES -- TH2D heatmaps
     // ============================================================
     fout->mkdir("cell_profiles")->cd();
     for (int e = 0; e < kNEtaBins; ++e) {
-        if (cnt_d[e] < 1 && sw_m[e] < 1) continue;
+        // Eta-integrated-over-pT profiles (sum across pT bins)
+        double tot_cnt_d = 0, tot_sw_m = 0, tot_sw_m2 = 0;
+        double tot_sf_d[kClusterSize] = {}, tot_swf_m[kClusterSize] = {}, tot_swf_m2[kClusterSize] = {};
+        for (int p = 0; p < nPtUsed; ++p) {
+            tot_cnt_d += cnt_d[e][p];
+            tot_sw_m  += sw_m[e][p];
+            tot_sw_m2 += sw_m2[e][p];
+            for (int k = 0; k < kClusterSize; ++k) {
+                tot_sf_d[k]   += sf_d[e][p][k];
+                tot_swf_m[k]  += swf_m[e][p][k];
+                tot_swf_m2[k] += swf_m2[e][p][k];
+            }
+        }
 
-        auto mk2D = [&](const char* tag) {
+        if (tot_cnt_d < 1 && tot_sw_m < 1) continue;
+
+        auto mk2D = [&](const char* tag, const char* ptSuf = "") {
             return new TH2D(
-                Form("h_frac_%s_eta%02d", tag, e),
-                Form("Cell frac %s  #eta [%.2f,%.2f);#eta idx;#phi idx",
-                     tag, kEtaLimits[e], kEtaLimits[e + 1]),
+                Form("h_frac_%s_eta%02d%s", tag, e, ptSuf),
+                Form("Cell frac %s  #eta [%.2f,%.2f)%s;#eta idx;#phi idx",
+                     tag, kEtaLimits[e], kEtaLimits[e + 1], ptSuf),
                 kEtaSize, 0, kEtaSize, kPhiSize, 0, kPhiSize);
         };
 
+        // Eta-only profiles (always created)
         TH2D* h2_mean_d  = mk2D("mean_data");
         TH2D* h2_mean_m  = mk2D("mean_mc");
         TH2D* h2_mean_m2 = mk2D("mean_mc_M2");
@@ -577,18 +705,65 @@ void fill_histograms(const char* channel  = "eegamma",
             int ie = k / kPhiSize;
             int ip = k % kPhiSize;
 
-            double md  = (cnt_d[e]  > 0) ? sf_d[e][k]  / cnt_d[e]  : 0;
-            double mm  = (sw_m[e]   > 0) ? swf_m[e][k] / sw_m[e]   : 0;
-            double mm2 = (sw_m2[e]  > 0) ? swf_m2[e][k]/ sw_m2[e]  : 0;
-            double vd  = (cnt_d[e]  > 0) ? sf2_d[e][k] / cnt_d[e]  - md  * md  : 0;
-            double vm  = (sw_m[e]   > 0) ? swf2_m[e][k]/ sw_m[e]   - mm  * mm  : 0;
+            double md  = (tot_cnt_d > 0) ? tot_sf_d[k]   / tot_cnt_d : 0;
+            double mm  = (tot_sw_m  > 0) ? tot_swf_m[k]  / tot_sw_m  : 0;
+            double mm2 = (tot_sw_m2 > 0) ? tot_swf_m2[k] / tot_sw_m2 : 0;
+
+            // RMS: sum over pT bins for eta-integrated RMS
+            double rms_d_sum2 = 0, rms_m_sum2 = 0;
+            double rms_d_w = 0, rms_m_w = 0;
+            for (int p = 0; p < nPtUsed; ++p) {
+                double rd = h_frac_d[e][p][k]->GetRMS();
+                double rm = h_frac_m[e][p][k]->GetRMS();
+                double nd = cnt_d[e][p];
+                double nm = sw_m[e][p];
+                rms_d_sum2 += nd * rd * rd;
+                rms_m_sum2 += nm * rm * rm;
+                rms_d_w += nd;
+                rms_m_w += nm;
+            }
+            double rd = (rms_d_w > 0) ? std::sqrt(rms_d_sum2 / rms_d_w) : 0;
+            double rm = (rms_m_w > 0) ? std::sqrt(rms_m_sum2 / rms_m_w) : 0;
 
             h2_mean_d ->SetBinContent(ie + 1, ip + 1, md);
             h2_mean_m ->SetBinContent(ie + 1, ip + 1, mm);
             h2_mean_m2->SetBinContent(ie + 1, ip + 1, mm2);
             h2_delta  ->SetBinContent(ie + 1, ip + 1, md - mm);
-            h2_rms_d  ->SetBinContent(ie + 1, ip + 1, (vd > 0) ? std::sqrt(vd) : 0);
-            h2_rms_m  ->SetBinContent(ie + 1, ip + 1, (vm > 0) ? std::sqrt(vm) : 0);
+            h2_rms_d  ->SetBinContent(ie + 1, ip + 1, rd);
+            h2_rms_m  ->SetBinContent(ie + 1, ip + 1, rm);
+        }
+
+        // Per-pT-bin profiles (only in eta_pt mode)
+        if (usePtBins) {
+            for (int p = 0; p < kNPtBins; ++p) {
+                if (cnt_d[e][p] < 1 && sw_m[e][p] < 1) continue;
+                TString ptSuf = Form("_pt%02d", p);
+
+                TH2D* h2p_mean_d  = mk2D("mean_data", ptSuf.Data());
+                TH2D* h2p_mean_m  = mk2D("mean_mc",   ptSuf.Data());
+                TH2D* h2p_mean_m2 = mk2D("mean_mc_M2", ptSuf.Data());
+                TH2D* h2p_delta   = mk2D("delta",     ptSuf.Data());
+                TH2D* h2p_rms_d   = mk2D("rms_data",  ptSuf.Data());
+                TH2D* h2p_rms_m   = mk2D("rms_mc",    ptSuf.Data());
+
+                for (int k = 0; k < kClusterSize; ++k) {
+                    int ie = k / kPhiSize;
+                    int ip = k % kPhiSize;
+
+                    double md  = (cnt_d[e][p]  > 0) ? sf_d[e][p][k]   / cnt_d[e][p]  : 0;
+                    double mm  = (sw_m[e][p]   > 0) ? swf_m[e][p][k]  / sw_m[e][p]   : 0;
+                    double mm2 = (sw_m2[e][p]  > 0) ? swf_m2[e][p][k] / sw_m2[e][p]  : 0;
+                    double rd  = h_frac_d[e][p][k]->GetRMS();
+                    double rm  = h_frac_m[e][p][k]->GetRMS();
+
+                    h2p_mean_d ->SetBinContent(ie + 1, ip + 1, md);
+                    h2p_mean_m ->SetBinContent(ie + 1, ip + 1, mm);
+                    h2p_mean_m2->SetBinContent(ie + 1, ip + 1, mm2);
+                    h2p_delta  ->SetBinContent(ie + 1, ip + 1, md - mm);
+                    h2p_rms_d  ->SetBinContent(ie + 1, ip + 1, rd);
+                    h2p_rms_m  ->SetBinContent(ie + 1, ip + 1, rm);
+                }
+            }
         }
     }
 
@@ -607,11 +782,12 @@ void fill_histograms(const char* channel  = "eegamma",
 int main(int argc, char** argv) {
     TApplication app("app", nullptr, nullptr);
     gROOT->SetBatch(true);
-    const char* ch = (argc > 1) ? argv[1] : "eegamma";
-    const char* sc = (argc > 2) ? argv[2] : "baseline";
-    const char* bd = (argc > 3) ? argv[3]
-                     : "../../output/cell_energy_reweighting_Francisco_method/data24";
-    fill_histograms(ch, sc, bd);
+    const char* ch  = (argc > 1) ? argv[1] : "eegamma";
+    const char* sc  = (argc > 2) ? argv[2] : "unconverted";
+    const char* bd  = (argc > 3) ? argv[3] : "../../output/Layer_2/eta_loose";
+    const char* bn  = (argc > 4) ? argv[4] : "eta";
+    const char* iso = (argc > 5) ? argv[5] : "loose";
+    fill_histograms(ch, sc, bd, bn, iso);
     return 0;
 }
 #endif
