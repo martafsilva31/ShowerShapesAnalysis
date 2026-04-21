@@ -255,6 +255,7 @@ where `variant` is one of `eta_loose`, `eta_tight`, `eta_pt_loose`, `eta_pt_tigh
 - Conventional commits: `feat:`, `fix:`, `docs:`, `chore:`.
 - Never commit: `.root`, `ntuples/`, `plots/`, `*.log`, `*.npz`, `*.pdf`, `*.png`.
 - Propose exact `git add`, `git commit -m "..."`, `git push` commands.
+- **Commit and push after each completed phase** (fill, plot, report, docs). Never accumulate more than one phase in a single commit.
 
 ---
 

@@ -13,9 +13,10 @@
 %%   pdflatex cell_reweighting_report.tex   (x2 for references)
 %%
 %% Prerequisites:
-%%   - Run the pipeline:  cd scripts/data_mc && bash run_layer2_comparison.sh
+%%   - Run the pipeline:  cd scripts/data_mc && bash run_layer2_final.sh
 %%   - Run chi2 extraction:  root -l -b -q 'extract_chi2.C()'
-%%   - Run comparison:  root -l -b -q 'extract_comparison_chi2.C()'
+%%   - Run comparison:  root -l -b -q 'extract_comparison_final.C()'
+%%   - Run cross-source comparison:  root -l -b -q 'extract_comparison_chi2.C()'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[11pt,a4paper]{article}
@@ -74,7 +75,9 @@ each cell energy by the mean data--MC fraction difference.  Method~2
 linear transformation derived from Francisco Almeida's
 \texttt{photoncellbasedrw} framework.  Both methods are evaluated across
 13~non-crack $\abseta$ bins, the combined $Z \to \ell\ell\gamma$ channel,
-and three photon conversion scenarios (unconverted, converted, inclusive).
+three photon conversion scenarios (unconverted, converted, inclusive),
+and four pipeline variants covering $\abseta$-only and two-dimensional
+($\abseta$, $\pt$) correction binning with loose and tight isolation.
 
 An initial implementation of M2 suffered from catastrophic instabilities
 in specific $\abseta$ bins, where divergent variance ratios in peripheral
@@ -93,7 +96,10 @@ A cross-source comparison with Francisco Almeida's
 quality, with small residual $\chisq$ differences attributable to
 different histogram axis ranges used in the two implementations.
 M2 with cell-dependent histogram ranges is the recommended cell-level
-correction method.
+correction method.  The \texttt{eta\_pt\_loose} variant (14~$\abseta$
+$\times$ 6~$\pt$ bins, loose isolation) achieves the best correction
+quality with $\langle\chisq\rangle = 0.0003$ for all three shower shape
+variables in the inclusive scenario.
 \end{abstract}
 
 \tableofcontents
@@ -581,6 +587,76 @@ The threshold $10^{-12}$ is far below any physically meaningful variance
 and serves only to prevent floating-point division by zero.  In practice
 it is never triggered for cells within the histogram range, since even
 the most peripheral cells have $\sigma_{\text{MC}} \sim 10^{-4}$--$10^{-3}$.
+
+
+\subsection{Pipeline variants: binning and isolation}
+\label{sec:variants}
+
+The correction pipeline is evaluated in four configurations, referred to
+as \emph{variants}, that differ in the correction binning and the photon
+isolation requirement.
+
+\begin{table}[htbp]
+\centering
+\caption{Pipeline variants for the Layer\,2 cell-energy reweighting study.
+  All variants use $Z \to \ell\ell\gamma$ (\texttt{llgamma} channel) and
+  the three conversion scenarios (unconverted, converted, inclusive).}
+\label{tab:variants}
+\begin{tabular}{llll}
+\toprule
+Variant & Binning & Isolation & Correction dimensions \\
+\midrule
+\texttt{eta\_loose}     & 14 $\abseta$ bins                        & Loose & $14 \times 1 \times 77$ \\
+\texttt{eta\_tight}     & 14 $\abseta$ bins                        & Tight & $14 \times 1 \times 77$ \\
+\texttt{eta\_pt\_loose} & $14 \times 6$ ($\abseta \times \pt$) bins & Loose & $14 \times 6 \times 77$ \\
+\texttt{eta\_pt\_tight} & $14 \times 6$ ($\abseta \times \pt$) bins & Tight & $14 \times 6 \times 77$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{$\abseta$-only binning.}
+Corrections are derived in 14 $\abseta$ bins covering $[0, 2.4]$ with
+the calorimeter crack region $[1.37, 1.52]$ excluded.  A single correction
+matrix is derived per $\abseta$ bin for all photons regardless of $\pt$.
+
+\paragraph{Two-dimensional ($\abseta$, $\pt$) binning.}
+In the extended mode, corrections are derived in $14 \times 6 = 84$
+bins, with the six \pt\ boundaries $[10, 15, 20, 25, 30, 40, 1000]$~GeV
+supplementing the 14~$\abseta$ bins.  This allows the corrections to
+capture any $\pt$ dependence of the data--MC cell-energy mismodelling
+that is not resolved by the $\abseta$-only corrections.  For bins with
+fewer than 50 data events the shower-shape histogram is skipped during
+plotting; in practice all populated $(\abseta, \pt)$ bins well above
+threshold.
+
+\paragraph{Isolation.}
+Two isolation requirements are studied.  The \emph{loose} isolation variant
+applies the ATLAS \texttt{FixedCutLoose} photon isolation working point.
+The \emph{tight} isolation variant applies the stricter
+\texttt{FixedCutTight} requirement.  The data and MC event yields for the
+two isolation variants are summarised in Table~\ref{tab:iso-yields}.
+
+\begin{table}[htbp]
+\centering
+\caption{Data and MC event yields for loose and tight isolation variants,
+  $Z \to \ell\ell\gamma$ channel.  Inclusive = unconverted + converted
+  (hadd).}
+\label{tab:iso-yields}
+\begin{tabular}{llrr}
+\toprule
+Isolation & Scenario    & Data events & MC events \\
+\midrule
+Loose     & Unconverted & 205\,309    & 2\,793\,063 \\
+Loose     & Converted   & 45\,532     & 756\,176    \\
+\midrule
+Tight     & Unconverted & 203\,186    & 2\,678\,387 \\
+Tight     & Converted   & 48\,901     & 776\,406    \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The correction quality comparison across all four variants is presented
+in Section~\ref{sec:disc-variants}.
 
 
 %% ====================================================================
@@ -1202,6 +1278,80 @@ factor~4.5 fewer), corresponding to a $\sim$$2\times$ increase in
 statistical uncertainty on the correction parameters.
 
 
+\subsection{Isolation requirement}
+\label{sec:disc-iso}
+
+Two photon isolation working points are evaluated (see
+Table~\ref{tab:iso-yields} in Section~\ref{sec:variants}).  The loose
+isolation variant selects $\sim$205\,k data events (unconverted) while
+the tight variant selects $\sim$203\,k, a reduction of only $\sim$1\%.
+For converted photons the tight selection yields slightly more events
+(48\,901 vs.\ 45\,532) due to different signal purities of the two
+working points.
+
+The correction quality in Table~\ref{tab:chi2-variant-comparison} shows
+that the loose isolation variant produces modestly better M2 performance
+for the unconverted scenario: $\chisq(\Reta) = 0.0005$ vs.\ $0.0008$,
+$\chisq(\weta) = 0.0005$ vs.\ $0.0008$.  The \Rphi\ variable is
+comparable between the two (0.0006 in both cases).  For the converted
+and inclusive scenarios the two isolation variants perform similarly.
+
+The slightly lower M2 performance with tight isolation is consistent
+with the reduced per-cell statistics for the correction derivation:
+fewer events provide a less precise estimate of the cell fraction
+distribution, marginally degrading the stretch and shift coefficients.
+Given the negligible differences in event yield and the similarity in
+M2 performance, \textbf{the loose isolation variant is recommended} as
+the default, since it maximises the statistics available for correction
+derivation without sacrificing sample purity relevant for the shower
+shape study.
+
+
+\subsection{Cross-variant comparison}
+\label{sec:disc-variants}
+
+Table~\ref{tab:chi2-variant-comparison} compares the average
+$\chisq$ across the four pipeline variants (see
+Section~\ref{sec:variants}) for the combined $Z \to \ell\ell\gamma$
+channel.  Values are averaged over all populated $\abseta$ bins.
+
+\input{chi2_variant_comparison}
+
+Several trends are apparent:
+
+\begin{enumerate}
+  \item \textbf{M2 consistently outperforms M1} across all variants and
+        scenarios.  This confirms the stabilisation fixes described in
+        Section~\ref{sec:disc-m2-stabilisation} are robust under
+        changes in binning and isolation requirements.
+
+  \item \textbf{Adding $\pt$ bins ($\eta\_pt$ vs.\ $\eta$) improves M2
+        quality} for unconverted and inclusive photons.  The most
+        notable improvement is for \Rphi: the average $\chisq$ decreases
+        from 0.0006 to 0.0004 (loose) in the unconverted scenario.
+        The $14 \times 6$ correction matrices capture pT-dependent
+        mismodelling that a single $\abseta$-only correction cannot
+        resolve.
+
+  \item \textbf{For converted photons the improvement from $\pt$ binning
+        is smaller.}  This is expected: the correction statistics per
+        $(\abseta, \pt)$ bin are thinner for converted photons
+        ($\sim$8\,k data events total), and the per-pT correction
+        matrices approach the statistical noise floor.
+
+  \item \textbf{Loose isolation provides slightly better corrections
+        than tight} for unconverted photons, consistent with the
+        discussion in Section~\ref{sec:disc-iso}.  For converted and
+        inclusive scenarios the difference is negligible.
+
+  \item \textbf{The \texttt{eta\_pt\_loose} variant achieves the best
+        overall $\chisq$} for the inclusive scenario:
+        $\chisq(\Reta) = 0.0003$, $\chisq(\Rphi) = 0.0003$,
+        $\chisq(\weta) = 0.0003$.  This is the recommended
+        configuration for production use.
+\end{enumerate}
+
+
 %% ====================================================================
 \section{Summary}
 \label{sec:summary}
@@ -1210,9 +1360,11 @@ statistical uncertainty on the correction parameters.
 This note documents a cell-level energy reweighting pipeline for
 correcting photon shower shape variables (\Reta, \Rphi, \weta) in ATLAS
 Run\,3 simulation.  Using $Z \to \ell\ell\gamma$ events from 2024 data
-and MC23e, corrections are derived and applied in 14~$\abseta$ bins
-for the combined channel and three conversion scenarios
-($\sim$$250\,\text{k}$ data events in the unconverted sample).
+and MC23e, corrections are derived and applied across four pipeline
+variants (see Table~\ref{tab:variants}) covering $|\eta|$-only and
+two-dimensional ($|\eta|$, $\pt$) correction binning with loose and tight
+isolation requirements, for three conversion scenarios (unconverted,
+converted, inclusive).
 
 Two methods are implemented:
 \begin{itemize}
@@ -1240,6 +1392,17 @@ empirical ATLAS fudge factors: identical for \Reta\ and \weta\ (0.0005),
 and within 20\% for \Rphi\ (0.0006 vs.\ 0.0005).  Unlike fudge
 factors, M2 preserves inter-variable correlations and automatically
 improves all observables built from Layer\,2 cell energies.
+
+Among the four pipeline variants, the \textbf{\texttt{eta\_pt\_loose}
+variant} --- two-dimensional ($\abseta$, $\pt$) binning with loose
+isolation --- achieves the best correction quality for the combined
+channel, reaching $\langle\chisq\rangle = 0.0003$ for all three shower
+shape variables in the inclusive scenario.  The $\pt$ binning provides
+the largest improvement for \Rphi\ (0.0006 $\to$ 0.0004 for unconverted
+loose), where the pT dependence of the cell energy profile is not fully
+captured by $\abseta$-only corrections.  Loose isolation is preferred
+over tight, as it maximises the statistics for correction derivation
+with negligible impact on sample purity.
 
 A cross-source comparison with Francisco Almeida's
 \texttt{photoncellbasedrw} Run\,3 output confirms equivalent correction
