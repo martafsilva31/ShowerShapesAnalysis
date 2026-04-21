@@ -43,7 +43,7 @@ SCENARIOS = ["converted", "inclusive", "unconverted"]
 SCENARIO_LABELS = {
     "converted":   r"Converted $\gamma$",
     "unconverted": r"Unconverted $\gamma$",
-    "inclusive":   r"Inclusive $\gamma$",
+    "inclusive":   r"Converted and Unconverted $\gamma$",
 }
 
 ETA_BINS = [
@@ -420,7 +420,7 @@ $(\eta \times \phi)$ grid.  Each page shows one $|\eta|$ bin.
                 L.append(r"\end{figure}")
         L.append(r"\clearpage")
 
-    # ── Section 8b: Per-pT Cell Energy Fraction Profiles (eta_pt only) ──
+    # ── Section 8b: Per-pT Cell Energy Fraction Profiles + Corrections (eta_pt only) ──
     if have("cell_data_pt00.pdf"):
         pt_cell_pdfs = ["cell_data", "cell_mc", "cell_mc_m1", "cell_mc_m2"]
         pt_cell_caps = {"cell_data": "Data", "cell_mc": "MC (uncorrected)",
@@ -431,7 +431,7 @@ $(\eta \times \phi)$ grid.  Each page shows one $|\eta|$ bin.
 \label{sec:cell-profiles-pt}
 %% ====================================================================
 
-Mean cell energy fraction maps per $p_{\mathrm{T}}$ bin.
+Mean cell energy fraction maps and corrections per $p_{\mathrm{T}}$ bin.
 """)
         for ip, (ptlo, pthi) in enumerate(PT_BINS):
             ptf = f"pt{ip:02d}"
@@ -440,6 +440,11 @@ Mean cell energy fraction maps per $p_{\mathrm{T}}$ bin.
                 continue
             # Determine max pages from the first available PDF
             n_pages_pt = pdf_pages(os.path.join(plots_dir, f"{avail[0]}_{ptf}.pdf"))
+            sf = f"cell_shift_{ptf}.pdf"
+            stf = f"cell_stretch_{ptf}.pdf"
+            have_corr = have(sf) and have(stf)
+            sf_pages = pdf_pages(os.path.join(plots_dir, sf)) if have_corr else 0
+            stf_pages = pdf_pages(os.path.join(plots_dir, stf)) if have_corr else 0
             L.append(rf"\subsection{{{pt_label(ptlo, pthi)}}}")
             for i, (lo, hi) in enumerate(ETA_BINS):
                 page = i + 1
@@ -463,13 +468,17 @@ Mean cell energy fraction maps per $p_{\mathrm{T}}$ bin.
                         L.append(r"\end{subfigure}\hfill")
                     L.append(rf"\caption{{Cell energy fraction maps, {pt_label(ptlo, pthi)}, {eta_label(lo, hi)}.}}")
                     L.append(r"\end{figure}")
+                # Shift + stretch for this pT/eta bin
+                if have_corr and page <= sf_pages and page <= stf_pages:
+                    L.append(two_panel(sf, stf, page,
+                                       r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
+                                       rf"Correction maps, {pt_label(ptlo, pthi)}, {eta_label(lo, hi)}."))
             L.append(r"\clearpage")
 
-    # ── Section 9: Cell-Level Corrections (eta-only variants only) ──
+    # ── Section 9: Cell-Level Corrections ──
     shift_pages = pdf_pages(os.path.join(plots_dir, "cell_shift.pdf"))
     stretch_pages = pdf_pages(os.path.join(plots_dir, "cell_stretch.pdf"))
-    if shift_pages >= 1 or stretch_pages >= 1:
-        L.append(r"""
+    L.append(r"""
 %% ====================================================================
 \section{Cell-Level Corrections}
 \label{sec:cell-corrections}
@@ -477,47 +486,15 @@ Mean cell energy fraction maps per $p_{\mathrm{T}}$ bin.
 
 M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 """)
-        if shift_pages >= NBINS and stretch_pages >= NBINS:
-            for i, (lo, hi) in enumerate(ETA_BINS):
-                page = i + 1
-                L.append(rf"\subsection*{{{eta_label(lo, hi)}}}")
-                L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
-                                   r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                                   rf"Correction maps, {eta_label(lo, hi)}."))
-        else:
-            L.append(r"\subsection*{Integrated (all $|\eta|$ bins)}")
-            L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", 1,
+    if shift_pages >= NBINS and stretch_pages >= NBINS:
+        for i, (lo, hi) in enumerate(ETA_BINS):
+            page = i + 1
+            L.append(rf"\subsection*{{{eta_label(lo, hi)}}}")
+            L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
                                r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                               r"Correction maps, integrated over $|\eta|$."))
-
-    # ── Section 9b: Per-pT Cell-Level Corrections (eta_pt only) ──
-    if have("cell_shift_pt00.pdf"):
-        L.append(r"""
-%% ====================================================================
-\section{Per-$p_{\mathrm{T}}$ Cell-Level Corrections}
-\label{sec:cell-corrections-pt}
-%% ====================================================================
-
-M1 shift and M2 stretch maps per $p_{\mathrm{T}}$ bin.
-""")
-        for ip, (ptlo, pthi) in enumerate(PT_BINS):
-            ptf = f"pt{ip:02d}"
-            sf = f"cell_shift_{ptf}.pdf"
-            stf = f"cell_stretch_{ptf}.pdf"
-            if not (have(sf) and have(stf)):
-                continue
-            sf_pages = pdf_pages(os.path.join(plots_dir, sf))
-            stf_pages = pdf_pages(os.path.join(plots_dir, stf))
-            L.append(rf"\subsection{{{pt_label(ptlo, pthi)}}}")
-            for i, (lo, hi) in enumerate(ETA_BINS):
-                page = i + 1
-                if page > sf_pages or page > stf_pages:
-                    break
-                L.append(rf"\subsubsection*{{{eta_label(lo, hi)}}}")
-                L.append(two_panel(sf, stf, page,
-                                   r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                                   rf"Correction maps, {pt_label(ptlo, pthi)}, {eta_label(lo, hi)}."))
-            L.append(r"\clearpage")
+                               rf"Correction maps, {eta_label(lo, hi)}."))
+    else:
+        L.append(r"\textit{Cell-level correction plots not available (see per-$p_{\mathrm{T}}$ section below).}")
 
     L.append(r"""
 \end{document}""")
@@ -565,7 +542,7 @@ for variant, variant_desc in VARIANTS.items():
             print(f"[skip] {variant}/{channel}/{scenario} not found")
             continue
 
-        tex_name = f"result_compendium_{variant}_{channel}_{scenario}.tex"
+        tex_name = f"result_compendium_{channel}_{scenario}.tex"
         tag = f"{variant}/{scenario}"
         print(f"Building {tag} ...", end=" ", flush=True)
 
