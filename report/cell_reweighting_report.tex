@@ -163,9 +163,12 @@ The combined channel ($Z \to \ell\ell\gamma$) merges both data and MC
 samples.  Ntuples are produced by the NTupleMaker package running in
 Athena~25.0.40.
 
-MC events are weighted by $w = w_{\text{MC}} \times w_\mu \times \sigma$,
+MC events are weighted by
+$w = w_{\text{MC}} \times w_\mu \times \sigma \times \text{SF}_{\text{trig}} \times \text{SF}_{\gamma} \times \text{SF}_{\ell}$,
 where $w_{\text{MC}}$ is the generator weight, $w_\mu$ the pile-up
-reweighting factor, and $\sigma$ the cross-section weight.
+reweighting factor, $\sigma$ the cross-section weight, and
+$\text{SF}_{\text{trig}}$, $\text{SF}_{\gamma}$, $\text{SF}_{\ell}$
+are the trigger, photon, and lepton scale factors respectively.
 
 \input{chi2_yields}
 
@@ -1095,11 +1098,6 @@ each corrected MC variant from three sources:
 All three use the same data and MC samples (unconverted,
 $Z \to \ell\ell\gamma$), so the $\chisq$ values are directly
 comparable.
-
-The comparison table (Table~\ref{tab:chi2-cmp-summary}) presents the
-averaged $\chisq$ across all $\abseta$ bins.
-
-\input{comparison_report/chi2_comparison_summary}
 
 \subsubsection{Histogram axis range effect}
 \label{sec:disc-range-effect}
