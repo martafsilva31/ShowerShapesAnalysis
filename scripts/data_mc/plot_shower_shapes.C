@@ -51,7 +51,9 @@ void drawPanel(std::vector<TH1D*>& histos,
                const char* scenLabel,
                TCanvas* c,
                const char* overrideEtaLabel = nullptr,
-               const char* ptLabel = nullptr) {
+               const char* ptLabel = nullptr,
+               double legX1 = 0.59, double legY1 = 0.65,
+               double legX2 = 0.96, double legY2 = 0.92) {
 
     c->Clear();
 
@@ -130,7 +132,7 @@ void drawPanel(std::vector<TH1D*>& histos,
     hRef->Draw("E P SAME X0");
 
     // Legend
-    TLegend* leg = new TLegend(0.52, 0.60, 0.89, 0.89);
+    TLegend* leg = new TLegend(legX1, legY1, legX2, legY2);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextSize(0.030);
@@ -328,7 +330,8 @@ int plot_shower_shapes(const char* channel   = "eegamma",
             std::vector<int> styles = {1, 1, 1, 1};
 
             drawPanel(hv, labels, colors, styles,
-                      v.title, n, chLabel, scenLabel, c);
+                      v.title, n, chLabel, scenLabel, c,
+                      nullptr, nullptr, 0.56, 0.67, 0.93, 0.90);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -367,7 +370,7 @@ int plot_shower_shapes(const char* channel   = "eegamma",
 
                     drawPanel(hv, labels, colors, styles,
                               v.title, n, chLabel, scenLabel, c,
-                              nullptr, ptBinLabel(p));
+                              nullptr, ptBinLabel(p), 0.56, 0.67, 0.93, 0.90);
                     c->Print(pdfPath);
                 }
                 c->Print(pdfPath + "]");
@@ -402,7 +405,8 @@ int plot_shower_shapes(const char* channel   = "eegamma",
             std::vector<int> styles = {1, 1, 1, 1};
 
             drawPanel(hv, labels, colors, styles,
-                      v.title, 0, chLabel, scenLabel, c, "Inclusive");
+                      v.title, 0, chLabel, scenLabel, c,
+                      nullptr, nullptr, 0.56, 0.67, 0.93, 0.90);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -430,7 +434,8 @@ int plot_shower_shapes(const char* channel   = "eegamma",
             std::vector<int> styles = {1, 1};
 
             drawPanel(hv, labels, colors, styles,
-                      v.title, 0, chLabel, scenLabel, c, "Inclusive");
+                      v.title, 0, chLabel, scenLabel, c,
+                      nullptr, nullptr, 0.65, 0.70, 0.96, 0.92);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -461,7 +466,8 @@ int plot_shower_shapes(const char* channel   = "eegamma",
                 std::vector<int> styles = {1, 1};
 
                 drawPanel(hv, labels, colors, styles,
-                          v.title, n, chLabel, scenLabel, c);
+                          v.title, n, chLabel, scenLabel, c,
+                          nullptr, nullptr, 0.65, 0.70, 0.96, 0.92);
                 c->Print(pdfPath);
             }
         }
@@ -493,7 +499,8 @@ int plot_shower_shapes(const char* channel   = "eegamma",
             std::vector<int> styles = {1, 1, 2};
 
             drawPanel(hv, labels, colors, styles,
-                      v.title, 0, chLabel, scenLabel, c, "Inclusive");
+                      v.title, 0, chLabel, scenLabel, c,
+                      nullptr, nullptr, 0.65, 0.62, 0.96, 0.88);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -527,7 +534,8 @@ int plot_shower_shapes(const char* channel   = "eegamma",
                 std::vector<int> styles = {1, 1, 2};
 
                 drawPanel(hv, labels, colors, styles,
-                          v.title, n, chLabel, scenLabel, c);
+                          v.title, n, chLabel, scenLabel, c,
+                          nullptr, nullptr, 0.65, 0.62, 0.96, 0.88);
                 c->Print(pdfPath);
             }
         }

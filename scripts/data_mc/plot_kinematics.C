@@ -90,7 +90,7 @@ void drawKinPanel(TH1D* hData, TH1D* hMC, TH1D* hMCnosf,
     }
     hData->Draw("E P SAME X0");
 
-    TLegend* leg = new TLegend(0.48, 0.66, 0.89, 0.89);
+    TLegend* leg = new TLegend(0.59, 0.70, 0.96, 0.92);
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextSize(0.035);

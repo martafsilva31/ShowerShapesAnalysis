@@ -43,7 +43,7 @@ SCENARIOS = ["converted", "inclusive", "unconverted"]
 SCENARIO_LABELS = {
     "converted":   r"Converted $\gamma$",
     "unconverted": r"Unconverted $\gamma$",
-    "inclusive":   r"Converted and Unconverted $\gamma$",
+    "inclusive":   r"Inclusive $\gamma$",
 }
 
 ETA_BINS = [
@@ -465,10 +465,11 @@ Mean cell energy fraction maps per $p_{\mathrm{T}}$ bin.
                     L.append(r"\end{figure}")
             L.append(r"\clearpage")
 
-    # ── Section 9: Cell-Level Corrections ──
+    # ── Section 9: Cell-Level Corrections (eta-only variants only) ──
     shift_pages = pdf_pages(os.path.join(plots_dir, "cell_shift.pdf"))
     stretch_pages = pdf_pages(os.path.join(plots_dir, "cell_stretch.pdf"))
-    L.append(r"""
+    if shift_pages >= 1 or stretch_pages >= 1:
+        L.append(r"""
 %% ====================================================================
 \section{Cell-Level Corrections}
 \label{sec:cell-corrections}
@@ -476,21 +477,18 @@ Mean cell energy fraction maps per $p_{\mathrm{T}}$ bin.
 
 M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 """)
-    if shift_pages >= NBINS and stretch_pages >= NBINS:
-        for i, (lo, hi) in enumerate(ETA_BINS):
-            page = i + 1
-            L.append(rf"\subsection*{{{eta_label(lo, hi)}}}")
-            L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
+        if shift_pages >= NBINS and stretch_pages >= NBINS:
+            for i, (lo, hi) in enumerate(ETA_BINS):
+                page = i + 1
+                L.append(rf"\subsection*{{{eta_label(lo, hi)}}}")
+                L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
+                                   r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
+                                   rf"Correction maps, {eta_label(lo, hi)}."))
+        else:
+            L.append(r"\subsection*{Integrated (all $|\eta|$ bins)}")
+            L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", 1,
                                r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                               rf"Correction maps, {eta_label(lo, hi)}."))
-    elif shift_pages >= 1 and stretch_pages >= 1:
-        # eta_pt mode: only 1 integrated page; include it once
-        L.append(r"\subsection*{Integrated (all $|\eta|$ bins)}")
-        L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", 1,
-                           r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                           r"Correction maps, integrated over $|\eta|$."))
-    else:
-        L.append(r"\textit{Cell-level correction plots not available.}")
+                               r"Correction maps, integrated over $|\eta|$."))
 
     # ── Section 9b: Per-pT Cell-Level Corrections (eta_pt only) ──
     if have("cell_shift_pt00.pdf"):
@@ -567,7 +565,7 @@ for variant, variant_desc in VARIANTS.items():
             print(f"[skip] {variant}/{channel}/{scenario} not found")
             continue
 
-        tex_name = f"result_compendium_{channel}_{scenario}.tex"
+        tex_name = f"result_compendium_{variant}_{channel}_{scenario}.tex"
         tag = f"{variant}/{scenario}"
         print(f"Building {tag} ...", end=" ", flush=True)
 

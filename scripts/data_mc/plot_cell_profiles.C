@@ -68,7 +68,7 @@ void drawCellMap(TH2D* hIn,
     c->SetLeftMargin(0.12);
     c->SetRightMargin(0.18);
     c->SetBottomMargin(0.12);
-    c->SetTopMargin(ptLabel ? 0.20 : 0.16);
+    c->SetTopMargin(0.16);
 
     hIn->SetStats(0);
     hIn->SetTitle("");
@@ -118,33 +118,29 @@ void drawCellMap(TH2D* hIn,
     lat.SetNDC();
     lat.SetTextFont(42);
 
-    double row1Y = ptLabel ? 0.965 : 0.955;
-    double row2Y = ptLabel ? 0.920 : 0.895;
-    double row3Y = 0.875;
+    double row1Y = 0.955;
+    double row2Y = 0.895;
 
-    // Row 1
+    // Row 1: ATLAS WiP (left), eta range (middle), channel (right)
     lat.SetTextSize(0.038);
     lat.SetTextAlign(11);
     lat.DrawLatex(0.03, row1Y, "#bf{#it{ATLAS}} Work in Progress");
-    lat.DrawLatex(0.44, row1Y, chLabel);
+    lat.SetTextSize(0.033);
+    lat.DrawLatex(0.44, row1Y, etaLabel);
+    lat.SetTextSize(0.038);
     lat.SetTextAlign(31);
-    lat.DrawLatex(0.97, row1Y, typeLabel);
+    lat.DrawLatex(0.97, row1Y, chLabel);
 
-    // Row 2
+    // Row 2: sqrt(s) (left), pT range if applicable (middle), scenario (right)
     lat.SetTextSize(0.033);
     lat.SetTextAlign(11);
     lat.DrawLatex(0.03, row2Y, "#sqrt{s} = 13.6 TeV");
-    lat.DrawLatex(0.44, row2Y, etaLabel);
+    if (ptLabel) {
+        lat.DrawLatex(0.44, row2Y, ptLabel);
+    }
     lat.SetTextSize(0.028);
     lat.SetTextAlign(31);
     lat.DrawLatex(0.97, row2Y, scenLabel);
-
-    // Row 3 (pT label, optional)
-    if (ptLabel) {
-        lat.SetTextSize(0.033);
-        lat.SetTextAlign(11);
-        lat.DrawLatex(0.44, row3Y, ptLabel);
-    }
 }
 
 
@@ -188,6 +184,12 @@ int plot_cell_profiles(const char* channel   = "eegamma",
                     n, kEtaLimits[n], kEtaLimits[n + 1]);
     };
 
+    // eta range only (no bin index) — used for pT-binned plots
+    auto etaRange = [](int n) -> TString {
+        return Form("%.2f < |#eta| < %.2f",
+                    kEtaLimits[n], kEtaLimits[n + 1]);
+    };
+
     auto nonEmpty = [](TH2D* h) -> bool {
         if (!h) return false;
         for (int i = 1; i <= h->GetNbinsX(); ++i)
@@ -222,7 +224,8 @@ int plot_cell_profiles(const char* channel   = "eegamma",
         {"cell_stretch", "Stretch correction",         "h_stretch",         true,  false},
     };
 
-    // ---- eta-only profiles ----
+    // ---- eta-only profiles (not produced for eta_pt variants) ----
+    if (!usePtBins) {
     for (auto& m : maps) {
         TString pdf = dir + Form("%s.pdf", m.fileName);
         std::cout << "Creating: " << pdf << std::endl;
@@ -242,13 +245,13 @@ int plot_cell_profiles(const char* channel   = "eegamma",
                     if (h1->GetBinContent(k) != 0) { ok = true; break; }
                 if (!ok) continue;
                 TH2D* h2 = corrTo2D(h1, Form("%s_2d_%d", m.fileName, n));
-                drawCellMap(h2, m.typeLabel, chLabel, etaLbl(n), scenLabel, c);
+                drawCellMap(h2, m.typeLabel, chLabel, etaRange(n), scenLabel, c);
                 c->Print(pdf);
                 delete h2;
             } else {
                 TH2D* h = (TH2D*)f->Get(hname);
                 if (!nonEmpty(h)) continue;
-                drawCellMap(h, m.typeLabel, chLabel, etaLbl(n), scenLabel, c);
+                drawCellMap(h, m.typeLabel, chLabel, etaRange(n), scenLabel, c);
                 c->Print(pdf);
             }
         }
@@ -268,12 +271,13 @@ int plot_cell_profiles(const char* channel   = "eegamma",
             if (!nonEmpty(hMC) || !hDelta) continue;
             TH2D* hM1 = (TH2D*)hMC->Clone(Form("cellsM1_%d", n));
             hM1->Add(hDelta);
-            drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaLbl(n), scenLabel, c);
+            drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaRange(n), scenLabel, c);
             c->Print(pdf);
             delete hM1;
         }
         c->Print(pdf + "]");
     }
+    } // end !usePtBins
 
     // ================================================================
     // Per-pT cell profile PDFs (only in eta_pt mode)
@@ -302,13 +306,13 @@ int plot_cell_profiles(const char* channel   = "eegamma",
                             if (h1->GetBinContent(k) != 0) { ok = true; break; }
                         if (!ok) continue;
                         TH2D* h2 = corrTo2D(h1, Form("%s_pt%d_2d_%d", m.fileName, p, n));
-                        drawCellMap(h2, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                        drawCellMap(h2, m.typeLabel, chLabel, etaRange(n), scenLabel, c, ptLbl);
                         c->Print(pdf);
                         delete h2;
                     } else {
                         TH2D* h = (TH2D*)f->Get(hname);
                         if (!nonEmpty(h)) continue;
-                        drawCellMap(h, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                        drawCellMap(h, m.typeLabel, chLabel, etaRange(n), scenLabel, c, ptLbl);
                         c->Print(pdf);
                     }
                 }
@@ -327,7 +331,7 @@ int plot_cell_profiles(const char* channel   = "eegamma",
                     if (!nonEmpty(hMC) || !hDelta) continue;
                     TH2D* hM1 = (TH2D*)hMC->Clone(Form("cellsM1_pt%d_%d", p, n));
                     hM1->Add(hDelta);
-                    drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                    drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaRange(n), scenLabel, c, ptLbl);
                     c->Print(pdf);
                     delete hM1;
                 }
