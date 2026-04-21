@@ -182,10 +182,10 @@ void extract_comparison_chi2(
         out << "\\begin{table}[htbp]\n\\centering\n";
         out << "\\caption{$\\chi^2/\\text{ndf}$ comparison for " << varTeX[iv]
             << " (" << scenario << ", " << channel << ")."
-               " Francisco has a single cell-based correction (shown as Corr.);$"
+               " Francisco has a single cell-based correction (shown as Corr.);"
                " M1/M2 are defined for Wide and Cell-dep.\\ only.}\n";
         out << "\\label{tab:chi2-cmp-" << vars[iv] << "-" << scenario << "}\n";
-        out << "\\small\n";
+        out << "\\resizebox{\\textwidth}{!}{%\n";
         out << "\\begin{tabular}{l|rrr|rrrr|rrrr}\n\\toprule\n";
         out << " & \\multicolumn{3}{c|}{Francisco / run3}"
                " & \\multicolumn{4}{c|}{Wide $[-1,2]$}"
@@ -231,7 +231,7 @@ void extract_comparison_chi2(
             }
         }
         out << " \\\\\n";
-        out << "\\bottomrule\n\\end{tabular}\n\\end{table}\n\n";
+        out << "\\bottomrule\n\\end{tabular}}\n\\end{table}\n\n";
     }
     out.close();
     std::cout << "Written: " << outFile << "\n";
@@ -248,7 +248,7 @@ void extract_comparison_chi2(
             " Francisco has a single cell-based correction (Corr.); M1/M2 apply to Wide/Cell-dep.\\ only."
             " Lower is better.}\n";
     sout << "\\label{tab:chi2-cmp-summary}\n";
-    sout << "\\small\n";
+    sout << "\\resizebox{\\textwidth}{!}{%\n";
     // Per variable: Francisco has 3 cols, others have 4 cols
     // Variables: 3.  Total data cols = 3*(3+4+4) = 33.  Plus label col.
     // We'll group per variable block:
@@ -320,7 +320,7 @@ void extract_comparison_chi2(
         sout << " \\\\\n";
     }
 
-    sout << "\\bottomrule\n\\end{tabular}\n\\end{table}\n";
+    sout << "\\bottomrule\n\\end{tabular}}\n\\end{table}\n";
     sout.close();
     std::cout << "Written: " << sumFile << "\n";
 
