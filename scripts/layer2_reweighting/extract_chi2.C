@@ -266,13 +266,16 @@ void extract_chi2(
         out << "Channel & Scenario & Data events & MC events \\\\\n";
         out << "\\midrule\n";
         for (int ic = 0; ic < nChan; ++ic) {
+            bool anyRow = false;
             for (int is = 0; is < nScen; ++is) {
+                if (R[ic][is].nData == 0 && R[ic][is].nMC == 0) continue;
+                anyRow = true;
                 out << chanTeX[ic] << " & " << scenTeX[is]
                     << " & " << (int)R[ic][is].nData
                     << " & " << (int)R[ic][is].nMC
                     << " \\\\\n";
             }
-            if (ic < nChan - 1) out << "\\midrule\n";
+            if (anyRow && ic < nChan - 1) out << "\\midrule\n";
         }
         out << "\\bottomrule\n";
         out << "\\end{tabular}\n";
@@ -310,14 +313,17 @@ void extract_chi2(
         out << "\\\\\n";
         out << "\\midrule\n";
         for (int ic = 0; ic < nChan; ++ic) {
+            bool anyRow = false;
             for (int is = 0; is < nScen; ++is) {
+                if (R[ic][is].nData == 0 && R[ic][is].nMC == 0) continue;
+                anyRow = true;
                 out << chanTeX[ic] << " & " << scenTeX[is];
                 for (int iv = 0; iv < nVar; ++iv)
                     for (int im = 0; im < nMeth; ++im)
                         out << " & " << fmtChi2(avg[ic][is][iv][im]);
                 out << " \\\\\n";
             }
-            if (ic < nChan - 1) out << "\\midrule\n";
+            if (anyRow && ic < nChan - 1) out << "\\midrule\n";
         }
         out << "\\bottomrule\n";
         out << "\\end{tabular}}\n";
@@ -338,6 +344,9 @@ void extract_chi2(
 
         for (int ic = 0; ic < nChan; ++ic) {
             for (int is = 0; is < nScen; ++is) {
+                // Skip channels with no data (histogram file absent)
+                if (R[ic][is].nData == 0 && R[ic][is].nMC == 0) continue;
+
                 TString label = Form("tab:chi2-%s-%s",
                                      channels[ic], scenarios[is]);
 
