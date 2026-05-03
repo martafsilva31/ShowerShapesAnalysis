@@ -1,0 +1,532 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.0cm]{geometry}
+\usepackage{graphicx}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{grffile}
+\usepackage{float}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{xspace}
+
+% Shortcuts
+\newcommand{\pT}{\ensuremath{p_{\mathrm{T}}}\xspace}
+\newcommand{\abseta}{\ensuremath{|\eta|}\xspace}
+\newcommand{\Zllg}{\ensuremath{Z \to \ell\ell\gamma}\xspace}
+\newcommand{\Zeeg}{\ensuremath{Z \to ee\gamma}\xspace}
+\newcommand{\Zmumug}{\ensuremath{Z \to \mu\mu\gamma}\xspace}
+\newcommand{\sqrts}{\ensuremath{\sqrt{s} = 13.6~\text{TeV}}\xspace}
+\newcommand{\fbinv}{\ensuremath{\text{fb}^{-1}}\xspace}
+\newcommand{\pbinv}{\ensuremath{\text{pb}^{-1}}\xspace}
+
+\graphicspath{{../output/kinematics/}}
+
+\title{Kinematic Distributions in the $\Zllg$ Photon Shower Shape Study:\\
+  MC Normalisation, Data--MC Agreement, and Conversion Rate Discrepancies}
+\author{Marta Fernandes}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note documents the investigation of photon kinematic distributions
+($\pT$ and $\abseta$) in $\Zllg$ events selected from 108~\fbinv of
+ATLAS data collected at $\sqrts$ in 2024, compared to Sherpa MC23e
+Monte Carlo simulation.  A significant normalisation discrepancy was traced
+to the use of DAOD-level sum-of-weights in the NTupleMaker framework,
+which misses events removed by derivation skimming.  Replacing these
+with EVNT-level values from AMI resolved the over-estimation.  The
+remaining ${\sim}20\%$ normalisation deficit is attributed to missing
+$Z{+}\text{jets}$ background and incomplete MC sample coverage.  Shape
+comparisons between data and MC reveal good agreement in $\pT$, while
+$\abseta$ distributions show conversion-status--dependent discrepancies
+linked to a known TRT barrel tracker issue in Run~3.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+% ====================================================================
+\section{Introduction}
+\label{sec:introduction}
+% ====================================================================
+
+The photon shower shape reweighting analysis requires precise data--MC comparisons
+of photon properties in $\Zllg$ events.  As a prerequisite, the kinematic
+distributions --- photon transverse momentum $\pT$ and pseudorapidity $\abseta$ ---
+must demonstrate adequate agreement between data and simulation, both in
+shape and in overall normalisation.
+
+This study was motivated by the observation that the MC prediction
+significantly exceeded the data yield.  The investigation revealed a
+normalisation bug in the MC event weighting, related to the handling of
+the sum-of-weights in the presence of DAOD-level skimming.  After correcting
+this, residual differences were found in the $\abseta$ distributions that
+depend on the photon conversion status, pointing to a known issue with the
+TRT barrel tracker in Run~3.
+
+% ====================================================================
+\section{Samples and Event Selection}
+\label{sec:samples}
+% ====================================================================
+
+\subsection{Data}
+
+The analysis uses 108~\fbinv of proton--proton collision data collected by the
+ATLAS detector in 2024 at $\sqrts$.  Events are selected from two DAOD
+derivations:
+\begin{itemize}
+  \item \textbf{EGAM3}: $\Zeeg$ candidates,
+  \item \textbf{EGAM4}: $\Zmumug$ candidates.
+\end{itemize}
+The two channels are analysed separately and also combined into an inclusive
+$\Zllg$ sample.
+
+\subsection{Monte Carlo}
+
+Simulated $\Zllg$ events are generated with Sherpa~2.2.14 using the MC23e
+campaign.  Two samples are used:
+
+\begin{table}[H]
+\centering
+\caption{MC samples and normalisation parameters.}
+\label{tab:mc-samples}
+\begin{tabular}{lcccc}
+\toprule
+DSID & Process & $\sigma$ [pb] & AMI EVNT sumW & Total events \\
+\midrule
+700770 & Sh\_2214\_eegamma   & 102.60 & $5.269 \times 10^{14}$ & 185\,402\,000 \\
+700771 & Sh\_2214\_mumugamma & 102.59 & $5.421 \times 10^{14}$ & 189\,985\,000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Cross-sections are obtained from the PMG cross-section database (\texttt{PMGxsecDB\_mc23.txt}).
+The generator filter efficiency is 1.0 for both samples.
+
+\subsection{Event Selection}
+
+The baseline selection follows Francisco's configuration for the cell-energy
+reweighting study:
+
+\begin{table}[H]
+\centering
+\caption{Event selection criteria.}
+\label{tab:selection}
+\begin{tabular}{lc}
+\toprule
+Variable & Requirement \\
+\midrule
+Photon $\pT$ & $> 10$~GeV \\
+Photon $|\eta|$ & $< 2.37$, excluding crack $[1.37, 1.52)$ \\
+$m_{\ell\ell}$ & $[40, 83]$~GeV \\
+$m_{\ell\ell\gamma}$ & $[80, 100]$~GeV \\
+$\Delta R(\gamma, \ell)$ & $> 0.4$ (both leptons) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several scenarios are studied, varying the photon conversion status and
+isolation requirement:
+
+\begin{table}[H]
+\centering
+\caption{Selection scenarios.}
+\label{tab:scenarios}
+\begin{tabular}{lccc}
+\toprule
+Scenario & Conversion & Photon ID & Isolation \\
+\midrule
+Baseline (unconverted) & Unconverted only & No ID & Loose \\
+Converted              & Converted only   & No ID & Loose \\
+All conversions        & Both             & No ID & Loose \\
+Tight isolation        & Unconverted only & No ID & Tight \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ====================================================================
+\section{MC Event Weight and the Normalisation Problem}
+\label{sec:normalisation}
+% ====================================================================
+
+\subsection{MC Weight Formula}
+
+Each MC event is weighted by:
+\begin{equation}
+w = w_{\mathrm{mc}} \times w_{\mu} \times \frac{\sigma \times \mathcal{L}}{\sum w_{\mathrm{EVNT}}} \times \mathrm{SF}_{\ell_1} \times \mathrm{SF}_{\ell_2} \times \mathrm{SF}_{\gamma,\mathrm{iso}}
+\label{eq:mc-weight}
+\end{equation}
+where $w_{\mathrm{mc}}$ is the generator weight, $w_{\mu}$ the pileup
+reweighting factor, $\sigma$ the cross-section, $\mathcal{L} = 108$~\fbinv
+the integrated luminosity, $\sum w_{\mathrm{EVNT}}$ the EVNT-level
+sum of generator weights, and the SF terms are lepton and photon isolation
+scale factors.
+
+An alternative weight without scale factors is also computed for comparison:
+\begin{equation}
+w_{\mathrm{no\,SF}} = w_{\mathrm{mc}} \times w_{\mu} \times \frac{\sigma \times \mathcal{L}}{\sum w_{\mathrm{EVNT}}}
+\end{equation}
+
+\subsection{The Bug: DAOD-level Sum-of-Weights}
+\label{sec:bug}
+
+The NTupleMaker framework, developed to process input AOD files (which are
+unskimmed), computes a sum of generator weights and stores it in a histogram
+(\texttt{h\_sumW}) in the output ROOT file.  The sum-of-weights is retrieved
+from bin~2 of this histogram.
+
+However, the production ntuples used in this analysis were derived from
+\textbf{DAOD} (Derived Analysis Object Data) files, which are \textbf{skimmed}:
+events that fail the derivation-level selection are removed before reaching
+the NTupleMaker.  Consequently, the recorded sum-of-weights only accounts
+for events that survived the DAOD skimming --- approximately \textbf{36\%}
+of the full EVNT-level sample.
+
+Using this DAOD-level $\sum w$ in the denominator of Equation~\ref{eq:mc-weight}
+inflates the per-event weight by a factor of:
+\begin{equation}
+\frac{\sum w_{\mathrm{EVNT}}}{\sum w_{\mathrm{DAOD}}} \approx 2.77
+\end{equation}
+
+This resulted in the MC prediction overshooting the data by a factor of
+${\sim}2.2$ (MC/Data $\approx 2.19$), which was immediately visible in the
+event-count kinematic distributions.
+
+\subsection{The Fix: AMI EVNT-level Sum-of-Weights}
+
+The fix replaces the dynamically computed DAOD-level sum-of-weights with
+the correct EVNT-level values obtained from AMI (the ATLAS Metadata
+Interface).  The corrected values are hardcoded in the analysis configuration:
+
+\begin{itemize}
+  \item DSID 700770: $\sum w = 5.269047 \times 10^{14}$
+  \item DSID 700771: $\sum w = 5.421893 \times 10^{14}$
+\end{itemize}
+
+After this correction, the MC/Data ratio drops to ${\sim}0.79$, i.e.\ the
+MC now \emph{under}predicts the data by about 20\%.
+
+\subsection{Residual Normalisation Deficit}
+\label{sec:residual}
+
+The remaining ${\sim}20\%$ deficit has several contributing causes:
+\begin{enumerate}
+  \item \textbf{Missing $Z{+}\text{jets}$ background}:
+    The MC samples contain only the signal process $Z \to \ell\ell\gamma$.
+    The data inevitably includes $Z{+}\text{jets}$ events where a jet is
+    misidentified as a photon.  This background is not subtracted and
+    contributes additional events in data.
+  \item \textbf{Incomplete MC sample coverage}:
+    The available MC samples cover 97.59\% of the total generated events;
+    some sub-jobs may have failed or not been included.
+  \item \textbf{Filter efficiencies}:
+    Generator-level filter efficiencies and potential differences in
+    the DAOD derivation acceptance are not fully accounted for.
+\end{enumerate}
+
+Crucially, this residual normalisation offset does \textbf{not} affect the
+shower shape reweighting, which uses \emph{area-normalised} distributions.
+The key requirement is that the \emph{shape} of the kinematic distributions
+agrees between data and MC.
+
+% ====================================================================
+\section{Results: Loose Isolation}
+\label{sec:results-loose}
+% ====================================================================
+
+Each figure shows the photon $\pT$ and $\abseta$ distributions for data (black
+markers), MC with scale factors (red histogram), and MC without scale factors
+(blue dashed histogram).  The left column shows absolute event counts
+and the right column shows area-normalised distributions.  A ratio
+panel (MC/Data) is included below each comparison.
+
+\subsection{Unconverted Photons}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/baseline/plots/kinematics_pt.pdf}
+  \caption{$\pT$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/baseline/plots/kinematics_pt_norm.pdf}
+  \caption{$\pT$ (normalised)}
+\end{subfigure}\\[1em]
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/baseline/plots/kinematics_eta.pdf}
+  \caption{$\abseta$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/baseline/plots/kinematics_eta_norm.pdf}
+  \caption{$\abseta$ (normalised)}
+\end{subfigure}
+\caption{Unconverted photons, loose isolation.
+  The $\pT$ shapes agree well between data and MC.  The $\abseta$ distribution
+  shows a deficit in MC in the barrel region, particularly at low $|\eta|$.}
+\label{fig:loose-uc}
+\end{figure}
+\clearpage
+
+\subsection{Converted Photons}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/converted/plots/kinematics_pt.pdf}
+  \caption{$\pT$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/converted/plots/kinematics_pt_norm.pdf}
+  \caption{$\pT$ (normalised)}
+\end{subfigure}\\[1em]
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/converted/plots/kinematics_eta.pdf}
+  \caption{$\abseta$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/converted/plots/kinematics_eta_norm.pdf}
+  \caption{$\abseta$ (normalised)}
+\end{subfigure}
+\caption{Converted photons, loose isolation.
+  Notably better data--MC agreement in $\abseta$ compared to the
+  unconverted case, as discussed in Section~\ref{sec:conversion}.}
+\label{fig:loose-conv}
+\end{figure}
+\clearpage
+
+\subsection{All Conversions}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/all_conv/plots/kinematics_pt.pdf}
+  \caption{$\pT$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/all_conv/plots/kinematics_pt_norm.pdf}
+  \caption{$\pT$ (normalised)}
+\end{subfigure}\\[1em]
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/all_conv/plots/kinematics_eta.pdf}
+  \caption{$\abseta$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{loose/llgamma/all_conv/plots/kinematics_eta_norm.pdf}
+  \caption{$\abseta$ (normalised)}
+\end{subfigure}
+\caption{All photons (unconverted + converted), loose isolation.
+  The inclusive $\abseta$ shape shows intermediate agreement, mixing the two
+  sub-populations.}
+\label{fig:loose-all}
+\end{figure}
+\clearpage
+
+% ====================================================================
+\section{Results: Tight Isolation}
+\label{sec:results-tight}
+% ====================================================================
+
+Applying tight isolation reduces the contribution of $Z{+}\text{jets}$
+background, where jets faking photons tend to be less isolated.
+As suggested by the supervisors, this was investigated to see if
+tighter selection improves the data--MC agreement.
+
+\subsection{Unconverted Photons}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/baseline/plots/kinematics_pt.pdf}
+  \caption{$\pT$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/baseline/plots/kinematics_pt_norm.pdf}
+  \caption{$\pT$ (normalised)}
+\end{subfigure}\\[1em]
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/baseline/plots/kinematics_eta.pdf}
+  \caption{$\abseta$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/baseline/plots/kinematics_eta_norm.pdf}
+  \caption{$\abseta$ (normalised)}
+\end{subfigure}
+\caption{Unconverted photons, tight isolation.
+  The normalisation gap narrows slightly compared to the loose isolation
+  case (Figure~\ref{fig:loose-uc}), consistent with the rejection of
+  $Z{+}\text{jets}$ background in data.}
+\label{fig:tight-uc}
+\end{figure}
+\clearpage
+
+\subsection{Converted Photons}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/converted/plots/kinematics_pt.pdf}
+  \caption{$\pT$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/converted/plots/kinematics_pt_norm.pdf}
+  \caption{$\pT$ (normalised)}
+\end{subfigure}\\[1em]
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/converted/plots/kinematics_eta.pdf}
+  \caption{$\abseta$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/converted/plots/kinematics_eta_norm.pdf}
+  \caption{$\abseta$ (normalised)}
+\end{subfigure}
+\caption{Converted photons, tight isolation.
+  The agreement remains comparably good as in the loose case
+  (Figure~\ref{fig:loose-conv}).}
+\label{fig:tight-conv}
+\end{figure}
+\clearpage
+
+\subsection{All Conversions}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/all_conv/plots/kinematics_pt.pdf}
+  \caption{$\pT$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/all_conv/plots/kinematics_pt_norm.pdf}
+  \caption{$\pT$ (normalised)}
+\end{subfigure}\\[1em]
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/all_conv/plots/kinematics_eta.pdf}
+  \caption{$\abseta$ (events)}
+\end{subfigure}\hfill
+\begin{subfigure}[b]{0.48\textwidth}
+  \includegraphics[width=\textwidth]{iso_tight/llgamma/all_conv/plots/kinematics_eta_norm.pdf}
+  \caption{$\abseta$ (normalised)}
+\end{subfigure}
+\caption{All photons, tight isolation.}
+\label{fig:tight-all}
+\end{figure}
+\clearpage
+
+% ====================================================================
+\section{Discussion}
+\label{sec:discussion}
+% ====================================================================
+
+\subsection{Shape Agreement in $\pT$}
+
+Across all scenarios and isolation working points, the normalised $\pT$
+distributions show excellent shape agreement between data and MC.  The ratio
+panels are consistent with unity within statistical uncertainties over the
+full $\pT$ range.  This confirms that the $\pT$ spectrum of the selected
+photons is well modelled by the Sherpa simulation and that the event weight
+calculation (after the EVNT-level fix) is correct up to the overall
+normalisation factor discussed in Section~\ref{sec:residual}.
+
+\subsection{Photon Conversion Rate Discrepancy}
+\label{sec:conversion}
+
+A striking observation is the significantly better data--MC agreement for
+\textbf{converted} photons (Figures~\ref{fig:loose-conv},
+\ref{fig:tight-conv}) compared to \textbf{unconverted} photons
+(Figures~\ref{fig:loose-uc}, \ref{fig:tight-uc}), particularly in the
+$\abseta$ distributions.
+
+This is understood as a consequence of a known \textbf{TRT barrel tracker
+problem in Run~3}.  The Transition Radiation Tracker (TRT), located in the
+barrel region ($|\eta| \lesssim 1.0$), plays a key role in classifying
+photons as converted or unconverted.  In Run~3, a malfunction in the TRT
+barrel causes:
+\begin{itemize}
+  \item A \textbf{higher fraction of photons classified as unconverted in
+    data} than in MC, because the TRT is less efficient at reconstructing
+    conversion tracks.
+  \item Conversely, a \textbf{lower rate of converted photons in data} compared
+    to MC.
+\end{itemize}
+
+A correction was previously applied that reclassifies TRT-converted photons
+as unconverted, but results from 2024 data show that this correction is
+\textbf{insufficient}.  The residual mis-classification leads to:
+\begin{itemize}
+  \item An \emph{excess} of unconverted photons in data relative to MC,
+    appearing as a normalisation deficit in the unconverted MC prediction.
+  \item Better agreement for \emph{converted} photons, because this category
+    is less affected by the TRT barrel issue (endcap conversions are
+    reconstructed differently).
+\end{itemize}
+
+This also explains why the $\abseta$ shape discrepancy is concentrated
+in the barrel region ($|\eta| < 1.0$), where the TRT barrel is active.
+
+\subsection{Effect of Tight Isolation}
+
+Applying tight isolation instead of loose isolation slightly improves the
+overall normalisation agreement, as expected from the rejection of
+$Z{+}\text{jets}$ background events in data.  The shape discrepancy in
+$\abseta$ for unconverted photons persists, however, confirming that it
+is not a background effect but rather the conversion-rate issue described
+above.
+
+\subsection{Scale Factors}
+
+The plots include an ``MC (no SFs)'' curve (blue dashed) in addition to
+the ``MC (with SFs)'' curve (red).  The scale factors applied are:
+lepton reconstruction and identification SFs ($\mathrm{SF}_{\ell_1}$,
+$\mathrm{SF}_{\ell_2}$) and photon isolation SF ($\mathrm{SF}_{\gamma,\mathrm{iso}}$).
+The difference between the two MC curves is small, indicating that the
+scale factors have a modest impact on the kinematic distributions.
+
+% ====================================================================
+\section{Summary and Conclusions}
+\label{sec:conclusions}
+% ====================================================================
+
+\begin{enumerate}
+  \item \textbf{Normalisation bug identified and fixed}:
+    The DAOD-level sum-of-weights used by the NTupleMaker framework only
+    accounts for ${\sim}36\%$ of the true EVNT-level total, inflating MC
+    weights by ${\sim}2.8\times$.  Replacing with AMI EVNT-level values
+    resolves the over-prediction.
+
+  \item \textbf{Residual ${\sim}20\%$ deficit understood}:
+    The remaining MC under-prediction is attributed to missing
+    $Z{+}\text{jets}$ background in MC, incomplete MC sample coverage
+    (97.59\%), and residual efficiency effects.  This does not affect
+    the shower shape analysis, which uses normalised distributions.
+
+  \item \textbf{$\pT$ shapes in good agreement}:
+    The normalised $\pT$ distributions show excellent data--MC agreement
+    across all scenarios, confirming the MC modelling is adequate for the
+    shower shape correction.
+
+  \item \textbf{$\abseta$ discrepancy linked to TRT barrel}:
+    The unconverted photon $\abseta$ distribution shows a deficit in MC
+    in the barrel region, while converted photons agree much better. This is
+    attributed to a known TRT barrel tracker problem in Run~3 that alters
+    the photon conversion classification rates between data and MC.  A
+    previous correction (reclassifying TRT-converted as unconverted) is
+    insufficient for 2024 data.
+
+  \item \textbf{Tight isolation improves agreement marginally}:
+    Tightening the isolation requirement reduces background contamination
+    and slightly improves the normalisation, but does not resolve the
+    conversion-rate discrepancy.
+\end{enumerate}
+
+Overall, the kinematic distributions validate the use of the $\Zllg$
+sample for the cell-energy reweighting study.  The $\pT$ shape agreement
+ensures that the shower shape corrections are not biased by kinematic
+mis-modelling.  The conversion-rate discrepancy motivates performing the
+shower shape analysis separately for unconverted and converted photons,
+and careful attention to the $\abseta$-binned corrections.
+
+\end{document}

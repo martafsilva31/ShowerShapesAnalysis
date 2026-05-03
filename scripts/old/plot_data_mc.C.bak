@@ -1,0 +1,244 @@
+///////////////////////////////////////////////////////////////////////////////
+// plot_data_mc.C
+//
+// Creates 6-curve comparison plots with ratio panels from histograms
+// produced by validate_data_mc.C.
+//
+// Upper pad: Data (markers) + MC unfudged + MC fudged + Rew M1 + Rew M2 + Rew M3
+// Lower pad: Ratio to Data
+//
+// Generates multi-page PDFs: one page per eta bin, one PDF per variable.
+//
+// Usage:
+//   root -l -b -q 'plot_data_mc.C("histos.root", "plots/")'
+//   root -l -b -q 'plot_data_mc.C("histos.root", "plots/", "Z#rightarrowee#gamma")'
+///////////////////////////////////////////////////////////////////////////////
+
+#include "config.h"
+
+#include <TFile.h>
+#include <TH1D.h>
+#include <TCanvas.h>
+#include <TPad.h>
+#include <TLegend.h>
+#include <TLatex.h>
+#include <TLine.h>
+#include <TStyle.h>
+#include <TROOT.h>
+#include <TString.h>
+#include <TSystem.h>
+#include <iostream>
+#include <algorithm>
+
+using namespace datamc;
+
+// ======================================================================
+// Draw one variable for one eta bin (5 curves + ratio)
+// ======================================================================
+void drawVariable(TH1D* hData, TH1D* hMC, TH1D* hFud,
+                  TH1D* hM1, TH1D* hM2, TH1D* hM3,
+                  const char* varName, const char* varTitle,
+                  int etaBin, const char* channelLabel,
+                  TCanvas* c) {
+
+    c->Clear();
+
+    // --- Upper pad: overlay ---
+    TPad* pad1 = new TPad("pad1", "", 0, 0.30, 1, 1.0);
+    pad1->SetBottomMargin(0.02);
+    pad1->SetLeftMargin(0.14);
+    pad1->Draw();
+    pad1->cd();
+
+    // Style
+    hData->SetMarkerStyle(20);
+    hData->SetMarkerSize(0.8);
+    hData->SetMarkerColor(kBlack);
+    hData->SetLineColor(kBlack);
+    hData->SetLineWidth(1);
+
+    hMC->SetLineColor(kRed);
+    hMC->SetLineWidth(2);
+    hMC->SetLineStyle(1);
+
+    hFud->SetLineColor(kRed);
+    hFud->SetLineWidth(2);
+    hFud->SetLineStyle(2);
+
+    hM1->SetLineColor(kGreen + 2);
+    hM1->SetLineWidth(2);
+    hM1->SetLineStyle(1);
+
+    hM2->SetLineColor(kBlue);
+    hM2->SetLineWidth(2);
+    hM2->SetLineStyle(1);
+
+    hM3->SetLineColor(kMagenta + 1);
+    hM3->SetLineWidth(2);
+    hM3->SetLineStyle(1);
+
+    // Find maximum for y-axis
+    double ymax = 1.6 * std::max({hData->GetMaximum(), hMC->GetMaximum(),
+                                   hFud->GetMaximum(), hM1->GetMaximum(),
+                                   hM2->GetMaximum(), hM3->GetMaximum()});
+
+    // Draw MC first (broadest), then overlay
+    hMC->SetMaximum(ymax);
+    hMC->SetMinimum(0);
+    hMC->GetXaxis()->SetLabelSize(0);
+    hMC->GetYaxis()->SetTitle("Normalised");
+    hMC->GetYaxis()->SetTitleSize(0.06);
+    hMC->GetYaxis()->SetLabelSize(0.05);
+    hMC->GetYaxis()->SetTitleOffset(0.95);
+    hMC->SetTitle("");
+    hMC->SetStats(0);
+
+    hMC->Draw("HIST");
+    hFud->Draw("HIST SAME");
+    hM1->Draw("HIST SAME");
+    hM2->Draw("HIST SAME");
+    hM3->Draw("HIST SAME");
+    hData->Draw("P SAME");
+
+    // Legend
+    TLegend* leg = new TLegend(0.52, 0.55, 0.89, 0.89);
+    leg->SetBorderSize(0);
+    leg->SetFillStyle(0);
+    leg->SetTextSize(0.030);
+    leg->AddEntry(hData, "Data", "lp");
+    leg->AddEntry(hMC,   "MC unfudged", "l");
+    leg->AddEntry(hFud,  "MC fudged", "l");
+    leg->AddEntry(hM1,   "Rew. M1 (flat shift)", "l");
+    leg->AddEntry(hM2,   "Rew. M2 (mean+RMS)", "l");
+    leg->AddEntry(hM3,   "Rew. M3 (mult. ratio)", "l");
+    leg->Draw();
+
+    // ATLAS Internal label
+    TLatex lat;
+    lat.SetNDC();
+    lat.SetTextSize(0.050);
+    lat.SetTextFont(72);
+    lat.DrawLatex(0.18, 0.86, "ATLAS");
+    lat.SetTextFont(42);
+    lat.DrawLatex(0.30, 0.86, "Internal");
+    lat.SetTextSize(0.038);
+    lat.DrawLatex(0.18, 0.80, channelLabel);
+    lat.SetTextSize(0.036);
+    lat.DrawLatex(0.18, 0.74,
+        Form("%s, |#eta| #in [%.2f, %.2f)",
+             varTitle, kEtaLimits[etaBin], kEtaLimits[etaBin + 1]));
+
+    // --- Lower pad: ratio to Data ---
+    c->cd();
+    TPad* pad2 = new TPad("pad2", "", 0, 0.0, 1, 0.30);
+    pad2->SetTopMargin(0.02);
+    pad2->SetBottomMargin(0.35);
+    pad2->SetLeftMargin(0.14);
+    pad2->Draw();
+    pad2->cd();
+
+    TH1D* r_mc  = (TH1D*)hMC->Clone(Form("r_mc_%s_%d", varName, etaBin));
+    TH1D* r_fud = (TH1D*)hFud->Clone(Form("r_fud_%s_%d", varName, etaBin));
+    TH1D* r_m1  = (TH1D*)hM1->Clone(Form("r_m1_%s_%d", varName, etaBin));
+    TH1D* r_m2  = (TH1D*)hM2->Clone(Form("r_m2_%s_%d", varName, etaBin));
+    TH1D* r_m3  = (TH1D*)hM3->Clone(Form("r_m3_%s_%d", varName, etaBin));
+
+    r_mc->Divide(hData);
+    r_fud->Divide(hData);
+    r_m1->Divide(hData);
+    r_m2->Divide(hData);
+    r_m3->Divide(hData);
+
+    r_mc->SetMinimum(0.85);
+    r_mc->SetMaximum(1.15);
+    r_mc->GetYaxis()->SetTitle("MC / Data");
+    r_mc->GetYaxis()->SetTitleSize(0.12);
+    r_mc->GetYaxis()->SetTitleOffset(0.45);
+    r_mc->GetYaxis()->SetLabelSize(0.10);
+    r_mc->GetYaxis()->SetNdivisions(505);
+    r_mc->GetXaxis()->SetTitle(varTitle);
+    r_mc->GetXaxis()->SetTitleSize(0.14);
+    r_mc->GetXaxis()->SetLabelSize(0.10);
+    r_mc->SetStats(0);
+
+    r_mc->Draw("HIST");
+    r_fud->Draw("HIST SAME");
+    r_m1->Draw("HIST SAME");
+    r_m2->Draw("HIST SAME");
+    r_m3->Draw("HIST SAME");
+
+    // Reference line at 1
+    double xmin = r_mc->GetXaxis()->GetXmin();
+    double xmax = r_mc->GetXaxis()->GetXmax();
+    TLine* line = new TLine(xmin, 1.0, xmax, 1.0);
+    line->SetLineColor(kGray + 2);
+    line->SetLineStyle(2);
+    line->SetLineWidth(1);
+    line->Draw();
+}
+
+// ======================================================================
+// Main
+// ======================================================================
+int plot_data_mc(const char* histoFile,
+                 const char* plotDir,
+                 const char* channelLabel = "Z#rightarrowll#gamma") {
+
+    gStyle->SetOptStat(0);
+    gROOT->SetBatch(true);
+
+    TFile* f = TFile::Open(histoFile, "READ");
+    if (!f || f->IsZombie()) {
+        std::cerr << "ERROR: Cannot open " << histoFile << std::endl;
+        return 1;
+    }
+
+    TString dir(plotDir);
+    if (!dir.EndsWith("/")) dir += "/";
+    gSystem->mkdir(dir, true);
+
+    TCanvas* c = new TCanvas("c", "Data-MC Comparison", 800, 700);
+
+    // Variable definitions
+    struct VarDef {
+        const char* prefix; const char* title; const char* pdfName;
+    };
+    VarDef vars[] = {
+        {"reta",  "R_{#eta}",    "rew_reta.pdf"},
+        {"rphi",  "R_{#phi}",    "rew_rphi.pdf"},
+        {"weta2", "w_{#eta 2}",  "rew_weta2.pdf"}
+    };
+
+    for (auto& v : vars) {
+        TString pdfPath = dir + v.pdfName;
+        std::cout << "Creating " << v.title << " plots..." << std::endl;
+        c->Print(pdfPath + "[");
+
+        for (int n = 0; n < kNEtaBins; ++n) {
+            TString s = Form("_%d", n);
+            TH1D* hData = (TH1D*)f->Get(Form("%s_data%s", v.prefix, s.Data()));
+            TH1D* hMC   = (TH1D*)f->Get(Form("%s_mc%s",   v.prefix, s.Data()));
+            TH1D* hFud  = (TH1D*)f->Get(Form("%s_fud%s",  v.prefix, s.Data()));
+            TH1D* hM1   = (TH1D*)f->Get(Form("%s_m1%s",   v.prefix, s.Data()));
+            TH1D* hM2   = (TH1D*)f->Get(Form("%s_m2%s",   v.prefix, s.Data()));
+            TH1D* hM3   = (TH1D*)f->Get(Form("%s_m3%s",   v.prefix, s.Data()));
+
+            if (!hData || !hMC || !hFud || !hM1 || !hM2 || !hM3) continue;
+            if (hData->GetEntries() < 100) continue;
+
+            drawVariable(hData, hMC, hFud, hM1, hM2, hM3,
+                         v.prefix, v.title, n, channelLabel, c);
+            c->Print(pdfPath);
+        }
+
+        c->Print(pdfPath + "]");
+        std::cout << "  Written: " << pdfPath << std::endl;
+    }
+
+    f->Close();
+    delete f;
+    delete c;
+
+    std::cout << "\n=== All plots created ===" << std::endl;
+    return 0;
+}

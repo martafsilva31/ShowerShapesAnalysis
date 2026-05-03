@@ -1,11 +1,16 @@
 # Ntuples - large data files, never track
 ntuples/
 
-# Output - computed histograms and plots
-output/
+# Output - computed histograms and plots (track only Layer 2 compendium PDFs)
+output/**
+!output/Layer_2/
+!output/Layer_2/**/
+!output/Layer_2/**/result_compendium_eta_*.pdf
 plots/
 
 # Compiled binaries
+scripts/layer2_reweighting/fill_histograms
+scripts/layer1_reweighting/fill_histograms
 scripts/data_mc/fill_histograms
 
 # ROOT files in analysis root
@@ -30,6 +35,10 @@ __pycache__/
 *.fdb_latexmk
 *.fls
 *.synctex.gz
+*.bbl
+*.bcf
+*.blg
+*.run.xml
 
 # Generated PDFs (from LaTeX)
 report/*.pdf
@@ -60,4 +69,21 @@ ATL-COM-PHYS-2025-662.pdf
 grid/0
 grid/1
 report/*_backup.tex
+report/**/*.pdf
 report/comparison_report/*.pdf
+
+# Auto-generated chi2 tables (produced by extract_chi2.C)
+report/chi2_*.tex
+report/chi2_variant_comparison.tex
+
+# Untracked docs
+docs/
+
+# Scratch backups
+scripts/**/*.bak_*
+
+# Generated configs (auto-created at runtime)
+configs/
+
+# Untracked docs
+docs/
