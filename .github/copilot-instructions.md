@@ -23,66 +23,56 @@ ShowerShapesAnalysis/          # This repo (git → github.com/martafsilva31/Sho
 │   └── instructions/
 │       ├── scripts.instructions.md   # Scoped to scripts/**
 │       └── grid.instructions.md      # Scoped to grid/**
-├── scripts/                   # Python analysis scripts
+├── scripts/                   # Analysis scripts
 │   ├── utils.py               # Shared I/O and cell-energy utilities
-│   ├── compute_reta.py        # Compute R_eta from 7×11 cells → histogram ROOT file
-│   ├── compute_rphi.py        # Compute R_phi from 7×11 cells → histogram ROOT file
-│   ├── compute_weta_2.py      # Compute w_eta_2 from 7×11 cells → histogram ROOT file
-│   ├── plot_reta.C            # ROOT macro: R_eta overlay + ratio
-│   ├── plot_rphi.C            # ROOT macro: R_phi overlay + ratio
-│   ├── plot_weta_2.C          # ROOT macro: w_eta_2 overlay + ratio
-│   ├── closure_test/          # MC closure test pipeline
-│   │   ├── config.h           # Shared config: branch names, geometry, helpers
-│   │   ├── create_pseudodata.C
-│   │   ├── derive_corrections.C
-│   │   ├── apply_corrections.C
-│   │   ├── validate_closure.C
-│   │   ├── plot_closure.C
-│   │   ├── run_closure_test.sh
-│   │   └── run_closure_suite.sh
-│   └── data_mc/               # Data-MC cell-energy reweighting pipeline (current)
-│       ├── config.h           # Shared config: cuts, branches, geometry, formulas, pT bins
-│       ├── fill_histograms.C  # Two-pass pipeline: accumulate → correct → fill (supports eta/eta_pt binning, loose/tight iso)
-│       ├── plot_shower_shapes.C # Shower shape plots: per-eta + per-pT PDFs
-│       ├── plot_cell_profiles.C # 7×11 cell heatmaps: per-eta + per-pT PDFs
-│       ├── extract_chi2.C     # Chi-squared tables for a single variant
-│       ├── extract_comparison_final.C  # Cross-variant chi2 comparison table
-│       ├── run_layer2_final.sh  # Full pipeline: 4 variants (eta×{loose,tight} + eta_pt×{loose,tight})
-│       ├── run_layer2_comparison.sh  # Legacy: wide vs cellrange comparison (deprecated)
-│       ├── run.sh             # Driver: compile, run fill + plot scripts
-│       └── old/               # Archived previous-iteration scripts
+│   ├── compute_reta.py / compute_rphi.py / compute_weta_2.py   # Shower shape computations
+│   ├── plot_reta.C / plot_rphi.C / plot_weta_2.C               # ROOT plot macros
+│   ├── layer2_reweighting/          # ★ ACTIVE: Layer 2 cell-energy reweighting pipeline
+│   │   ├── config.h           # Shared config: cuts, branches, geometry, formulas, pT bins
+│   │   ├── fill_histograms.C  # Two-pass pipeline: accumulate → correct → fill
+│   │   ├── plot_shower_shapes.C # Shower shape plots: per-eta + per-pT PDFs
+│   │   ├── plot_cell_profiles.C # 7×11 cell heatmaps + correction vector plots
+│   │   ├── plot_mu_scaling.C  # Pileup study: χ²/ndf and M1 shift vs ⟨μ⟩
+│   │   ├── extract_chi2.C     # Chi-squared tables for a single variant
+│   │   ├── extract_comparison_final.C  # Cross-variant chi2 comparison table
+│   │   ├── run_layer2_final.sh  # Full pipeline driver (6 phases including compendium)
+│   │   ├── make_compendiums.py  # LaTeX compendium generator for all variants/scenarios
+│   │   └── README.md
+│   ├── layer1_reweighting/          # ★ ACTIVE: Layer 1 cell-energy reweighting
+│   │   ├── config.h / fill_histograms.C / plot_shower_shapes.C / plot_cell_profiles.C
+│   │   ├── extract_chi2.C
+│   │   ├── run_layer1_final.sh
+│   │   └── README.md
+│   ├── data_mc_normalisation_mismatches/  # ★ ACTIVE: Data–MC kinematic normalisation study
+│   │   ├── plot_kinematics.C / plot_kinematics_abs.C
+│   │   ├── run_kinematics.sh / run_kinematics_phase2.sh
+│   │   ├── make_kinematics_compendium.py
+│   │   └── README.md
+│   └── old/                         # Archived: closure_test/, cell_collision_study/
 ├── grid/                      # Grid submission scripts (pathena)
 │   ├── samples/               # Dataset sample lists
 │   ├── download_ntuples.sh    # Download + merge ntuples from grid
-│   ├── submit_data22.sh       # Data 2022 (broken — GRL mismatch)
-│   ├── submit_data24.sh       # Data 2024 run 473235
-│   └── submit_mc23e_Zllg.sh   # MC23e Z→llγ (Zeeg + Zmumug)
-├── configs/                   # Analysis configuration files
+│   ├── submit_data24.sh       # Data 2024
+│   ├── submit_data24_all.sh / submit_data24_egam3.sh / submit_data24_egam4.sh
+│   ├── submit_mc23e_DAOD.sh / submit_mc23e_Zllg.sh
+│   ├── resubmit_477048_egam3.sh
+│   └── old/                   # Archived: submit_data22.sh (Run 2, GRL mismatch — superseded)
+├── configs/                   # Analysis configuration files (gitignored)
 ├── ntuples/                   # gitignored — ROOT ntuples
-│   ├── data22/                # All 0 events (GRL mismatch: runs 428xxx not in GRL starting at 431810)
-│   ├── data24/                # Pending grid submission
+│   ├── data24/                # Data 2024
 │   └── mc23e/                 # mc23e_700770_Zeeg.root (13 GB), mc23e_700771_Zmumug.root (23 GB)
-├── output/                    # gitignored — computed histograms + plots
-│   ├── old/                   # Archived output from previous iteration
-│   ├── cell_energy_reweighting_Francisco_method/  # Legacy output (deprecated)
+├── output/                    # Mostly gitignored — computed histograms + plots
 │   └── Layer_2/               # Current output for Layer 2 cell reweighting
-│       ├── make_compendiums.py  # Generates LaTeX compendium PDFs for all variants
-│       ├── eta_loose/         # eta-only binning, loose isolation
-│       ├── eta_tight/         # eta-only binning, tight isolation
-│       ├── eta_pt_loose/      # eta×pT binning, loose isolation
-│       └── eta_pt_tight/      # eta×pT binning, tight isolation
-│           └── {channel}/{scenario}/
-│               ├── histograms.root
-│               ├── plots/
-│               └── report/chi2_*.tex
-├── report/                    # Reports and documentation
-│   ├── egam3_problem_report.md            # DAOD_EGAM3 problem analysis
-│   ├── weta2_investigation_summary.md     # w_eta_2 study summary
-│   ├── closure_test_report.tex            # MC closure test report
-│   ├── cell_reweighting_report.tex        # Physics report: M1/M2 pipeline (current)
-│   ├── chi2_yields.tex                    # Auto-generated event yield table
-│   ├── chi2_summary.tex                   # Auto-generated chi-squared summary
-│   └── chi2_tables.tex                    # Auto-generated per-eta chi-squared tables
+│       ├── eta_loose/ eta_tight/ eta_pt_loose/ eta_pt_tight/ eta_mu_loose/
+│       │   └── {channel}/{scenario}/
+│       │       ├── histograms.root
+│       │       ├── result_compendium_{variant}_{channel}_{scenario}.pdf  ← tracked in git
+│       │       └── plots/
+├── report/                    # LaTeX reports and documentation
+│   ├── layer2/                    # cell_reweighting_report.tex
+│   ├── data_mc_normalisation_mismatches/  # kinematics_report.tex
+│   ├── old/                       # Archived: closure test, theory, egam3, weta2, comparison_report/
+│   └── refs_theory.bib
 └── setup.sh                   # Environment: setupATLAS + Athena 25.0.40 + NTupleMaker build
 ```
 
@@ -240,7 +230,7 @@ pT bins (GeV): [10, 15, 20, 25, 30, 40, 1000]. Defined in `config.h` as `kPtLimi
 
 Output base directory: `output/Layer_2/{variant}/{channel}/{scenario}/`
 where `variant` is one of `eta_loose`, `eta_tight`, `eta_pt_loose`, `eta_pt_tight`, `eta_mu_loose`.
-(at repo root, **not** inside `scripts/data_mc/`; scripts use relative path `../../output/Layer_2/...`)
+Scripts use relative path `../../output/Layer_2/...` from `scripts/layer2_reweighting/`.
 
 ---
 
@@ -276,7 +266,7 @@ In addition to the global self-maintenance rules, for THIS repo:
 | New script added to `scripts/` | README.md § Directory Structure + this file § Architecture |
 | New grid script added | README.md § Grid Submission + `grid.instructions.md` |
 | New ntuple campaign downloaded | README.md § Known Issues (if relevant), this file § Architecture |
-| Task from Task List completed | README.md § Task List (check the box) |
+| Active study folder reorganised | README.md § Active Studies + this file § Architecture |
 | New known issue found | README.md § Known Issues + this file § Known Issues |
 | Setup procedure changes (new Athena version, new tool) | `setup.sh` + this file § Architecture + global instructions § Software Stack |
 

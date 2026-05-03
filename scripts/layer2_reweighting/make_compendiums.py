@@ -28,7 +28,7 @@ def pdf_pages(path):
             return int(line.split()[-1])
     return 0
 
-BASE     = os.path.dirname(os.path.abspath(__file__))
+BASE     = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../output/Layer_2"))
 PDFLATEX = "/cvmfs/sft.cern.ch/lcg/external/texlive/latest/bin/x86_64-linux/pdflatex"
 
 VARIANTS = {

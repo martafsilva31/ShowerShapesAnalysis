@@ -195,9 +195,9 @@ echo ""
 echo ">>> Phase 6: Generating compendia"
 echo ""
 
-# make_compendiums.py lives in output/Layer_2/ and iterates all variants itself
-if [[ -f "${OUTBASE}/make_compendiums.py" ]]; then
-    python3 "${OUTBASE}/make_compendiums.py" || echo "  WARN: make_compendiums.py failed"
+# make_compendiums.py lives in scripts/layer2_reweighting/ alongside this script
+if [[ -f "${SCRIPTDIR}/make_compendiums.py" ]]; then
+    python3 "${SCRIPTDIR}/make_compendiums.py" || echo "  WARN: make_compendiums.py failed"
 else
     for var in "${VARIANTS_RUN[@]}"; do
         BASE="${OUTBASE}/${var}"

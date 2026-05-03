@@ -190,26 +190,4 @@ bash ShowerShapesAnalysis/grid/submit_mc23e_Zllg.sh   # MC23e Z→llγ
 | Repo | Location | Remote |
 |------|----------|--------|
 | **NTupleMaker** | `../NTupleMaker_workspace/source/NTupleMaker/` | `gitlab.cern.ch/femarta/cellntuplemaker` |
-| **showershapereweighting** | `../showershapereweighting/` | `gitlab.cern.ch/mobelfki/showershapereweighting` |
-
-## Known Issues
-
-- **Data22 has 0 events**: Runs 428648–429027 (periods A–E) are not covered by the 2022 GRL, which starts at run 431810 (period F). Need to re-download runs from periods F/H/J.
-
-## Developer Workflow
-
-### Adding a New Script
-
-1. Place it in `scripts/`.
-2. Include a docstring or header comment describing inputs/outputs.
-3. Accept input file paths as CLI arguments (no hardcoded paths).
-4. Follow the naming convention: `<verb>_<observable>.py` (e.g., `compute_weta_2.py`).
-5. Use shared utilities from `utils.py` for file I/O and cell-energy extraction.
-
-### Adding a New Grid Dataset
-
-1. Verify the run is in the GRL (see `.github/instructions/grid.instructions.md`).
-2. Create `grid/submit_<dataset>.sh` following the existing template.
-3. Add sample dataset names to `grid/samples/`.
-
 
