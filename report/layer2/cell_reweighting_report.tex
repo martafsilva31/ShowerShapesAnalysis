@@ -9,14 +9,13 @@
 %% the recommended method.
 %%
 %% Compile:
-%%   cd report/
+%%   cd report/layer2/
 %%   pdflatex cell_reweighting_report.tex   (x2 for references)
 %%
 %% Prerequisites:
-%%   - Run the pipeline:  cd scripts/data_mc && bash run_layer2_final.sh
+%%   - Run the pipeline:  cd scripts/layer2_reweighting && bash run_layer2_final.sh
 %%   - Run chi2 extraction:  root -l -b -q 'extract_chi2.C()'
 %%   - Run comparison:  root -l -b -q 'extract_comparison_final.C()'
-%%   - Run cross-source comparison:  root -l -b -q 'extract_comparison_chi2.C()'
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[11pt,a4paper]{article}
@@ -40,8 +39,8 @@
   urlcolor=blue!50!black
 }
 
-% Graphics path: output directory (relative to report/)
-\graphicspath{{../output/Layer_2/hist_sigma_cellrange/}}
+% Graphics path: output directory (relative to report/layer2/)
+\graphicspath{{../../output/Layer_2/eta_pt_loose/}}
 
 % Custom commands
 \newcommand{\Reta}{\ensuremath{R_{\eta}}}
@@ -55,7 +54,7 @@
 \title{Photon Shower Shape Corrections Using Cell-Level Energy Reweighting\\
        with ATLAS Run\,3 Data}
 \author{Marta Fernandes da Silva}
-\date{April 2026}
+\date{May 2026}
 
 \begin{document}
 \maketitle
@@ -170,7 +169,7 @@ reweighting factor, $\sigma$ the cross-section weight, and
 $\text{SF}_{\text{trig}}$, $\text{SF}_{\gamma}$, $\text{SF}_{\ell}$
 are the trigger, photon, and lepton scale factors respectively.
 
-\input{chi2_yields}
+\input{../chi2_yields}
 
 %% ====================================================================
 \section{Event Selection}
@@ -722,7 +721,7 @@ Table~\ref{tab:chi2-summary} summarises the average $\chisq$ across all
 non-crack $\abseta$ bins for each method, channel, and conversion
 scenario.
 
-\input{chi2_summary}
+\input{../chi2_summary}
 
 
 %% ====================================================================
@@ -1313,7 +1312,7 @@ $\chisq$ across the four pipeline variants (see
 Section~\ref{sec:variants}) for the combined $Z \to \ell\ell\gamma$
 channel.  Values are averaged over all populated $\abseta$ bins.
 
-\input{chi2_variant_comparison}
+\input{../chi2_variant_comparison}
 
 Several trends are apparent:
 
@@ -1419,7 +1418,7 @@ lower $\chisq$ values for the same underlying correction).
 This appendix contains the per-$\abseta$-bin $\chisq$ tables for all
 conversion scenario combinations.
 
-\input{chi2_tables}
+\input{../chi2_tables}
 
 \section{Cross-Source Comparison Per-Eta Tables}
 \label{app:comparison-tables}
@@ -1429,7 +1428,7 @@ between Francisco's \texttt{photoncellbasedrw} Run\,3 output, the
 wide $[-1,2]$ range configuration, and the cell-dependent range
 configuration, for each shower shape variable individually.
 
-\input{comparison_report/chi2_comparison}
+\input{../old/comparison_report/chi2_comparison}
 
 
 %% ====================================================================

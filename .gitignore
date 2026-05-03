@@ -70,7 +70,8 @@ grid/0
 grid/1
 report/*_backup.tex
 report/**/*.pdf
-report/comparison_report/*.pdf
+!report/layer2/cell_reweighting_report.pdf
+!report/data_mc_normalisation_mismatches/kinematics_report.pdf
 
 # Auto-generated chi2 tables (produced by extract_chi2.C)
 report/chi2_*.tex
