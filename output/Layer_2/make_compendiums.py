@@ -36,6 +36,7 @@ VARIANTS = {
     "eta_tight":     r"$\eta$-only binning, tight isolation",
     "eta_pt_loose":  r"$\eta \times p_{\mathrm{T}}$ binning, loose isolation",
     "eta_pt_tight":  r"$\eta \times p_{\mathrm{T}}$ binning, tight isolation",
+    "eta_mu_loose": r"$\eta \times \langle\mu\rangle$ binning, loose isolation",
 }
 
 SCENARIOS = ["converted", "inclusive", "unconverted"]
@@ -64,6 +65,16 @@ def pt_label(lo, hi):
         return rf"$p_{{\mathrm{{T}}}} > {lo}$~GeV"
     return rf"${lo} < p_{{\mathrm{{T}}}} < {hi}$~GeV"
 
+MU_BINS = [
+    (0, 40), (40, 55), (55, 70),
+]
+NMU = len(MU_BINS)  # 3
+
+def mu_label(lo, hi):
+    if hi >= 119:
+        return rf"$\langle\mu\rangle > {lo}$"
+    return rf"${lo} < \langle\mu\rangle < {hi}$"
+
 CHANNEL_LATEX = {
     "llgamma": r"$Z \to \ell\ell\gamma$",
     "eegamma": r"$Z \to ee\gamma$",
@@ -86,6 +97,23 @@ def extract_chi2_table(chi2_tables_path, channel, scenario):
         if label in m.group(0):
             return m.group(0)
     return None
+
+
+def extract_chi2_pt_tables(chi2_pt_path, scenario):
+    """Extract all per-(|eta|,pT) chi2 table blocks for a given scenario
+    from chi2_tables_eta_pt.tex (written by extract_chi2.C for eta_pt variants).
+    Returns a list of LaTeX table strings (one per shower-shape variable).
+    """
+    if not os.path.isfile(chi2_pt_path):
+        return []
+    with open(chi2_pt_path) as f:
+        text = f.read()
+    pattern = r"(\\begin\{table\}.*?\\end\{table\})"
+    result = []
+    for m in re.finditer(pattern, text, re.DOTALL):
+        if f"tab:chi2-etapt-{scenario}-" in m.group(0):
+            result.append(m.group(0))
+    return result
 
 
 def three_panel(pdf, p1, p2, p3, caption, width="0.32"):
@@ -178,7 +206,7 @@ def four_panel(pdf1, pdf2, pdf3, pdf4, page, caps, caption, width="0.48"):
 
 # ── build full tex ────────────────────────────────────────────────────────────
 
-def build_tex(channel, scenario, variant_desc, chi2_table, plots_dir):
+def build_tex(channel, scenario, variant_desc, chi2_table, plots_dir, report_dir="", variant=""):
     ch_label = CHANNEL_LATEX.get(channel, channel)
     sc_title = SCENARIO_LABELS.get(scenario, scenario.capitalize())
 
@@ -226,6 +254,19 @@ def build_tex(channel, scenario, variant_desc, chi2_table, plots_dir):
         L.append(chi2_table)
     else:
         L.append(r"\emph{Chi-squared table not available for this combination.}")
+
+    # Per-(|eta|,pT) chi2 tables — only for eta_pt variants
+    if report_dir:
+        chi2_pt_path = os.path.join(report_dir, "chi2_tables_eta_pt.tex")
+        pt_tables = extract_chi2_pt_tables(chi2_pt_path, scenario)
+        if pt_tables:
+            L.append(r"""
+%% Per-(eta,pT) chi-squared tables
+\subsection*{Per-$(|\eta|, p_{\mathrm{T}})$ $\chi^2/n_{\mathrm{df}}$ Tables}
+""")
+            for t in pt_tables:
+                L.append(t)
+
     L.append(r"\clearpage")
 
     # ── Section 2: Integrated Shower Shape Comparisons ──
@@ -259,8 +300,37 @@ Data versus uncorrected MC, M1, and M2 corrections for each $|\eta|$ bin.
                                    rf"Shower shape comparisons, {eta_label(lo, hi)}."))
     L.append(r"\clearpage")
 
-    # ── Section 3b: Per-pT Shower Shape Comparisons (eta_pt only) ──
-    if have("rew_reta_pt00.pdf"):
+    # ── Section 3b: Per-mu Shower Shape Comparisons (eta_mu only) ──
+    if have("rew_reta_mu00.pdf"):
+        L.append(r"""
+%% ====================================================================
+\section{Per-$\langle\mu\rangle$ Shower Shape Comparisons}
+\label{sec:shower-mu}
+%% ====================================================================
+
+Data versus uncorrected MC, M1, and M2 corrections for each $\langle\mu\rangle$ bin.
+""")
+        for imu, (mulo, muhi) in enumerate(MU_BINS):
+            muf = f"mu{imu:02d}"
+            reta_mu = f"rew_reta_{muf}.pdf"
+            rphi_mu = f"rew_rphi_{muf}.pdf"
+            weta_mu = f"rew_weta2_{muf}.pdf"
+            if not have(reta_mu):
+                continue
+            n_pages_mu = pdf_pages(os.path.join(plots_dir, reta_mu))
+            L.append(rf"\subsection{{{mu_label(mulo, muhi)}}}")
+            for i, (lo, hi) in enumerate(ETA_BINS):
+                page = i + 1
+                if page > n_pages_mu:
+                    break
+                L.append(rf"\subsubsection*{{{eta_label(lo, hi)}}}")
+                L.append(three_panel_3pdfs(reta_mu, rphi_mu, weta_mu,
+                                           page,
+                                           rf"Shower shape comparisons, {mu_label(mulo, muhi)}, {eta_label(lo, hi)}."))
+            L.append(r"\clearpage")
+
+    # ── Section 3c: Per-pT Shower Shape Comparisons (eta_pt only) ──
+    if "eta_pt" in variant and have("rew_reta_pt00.pdf"):
         L.append(r"""
 %% ====================================================================
 \section{Per-$p_{\mathrm{T}}$ Shower Shape Comparisons}
@@ -288,6 +358,54 @@ Each $p_{\mathrm{T}}$ bin contains all $|\eta|$ bins.
                                            page,
                                            rf"Shower shape comparisons, {pt_label(ptlo, pthi)}, {eta_label(lo, hi)}."))
             L.append(r"\clearpage")
+
+    # ── Section 3d: Shower Shapes vs ATLAS Fudge Factors ──
+    if have("rew_vs_fudge_reta.pdf"):
+        L.append(r"""
+%% ====================================================================
+\section{Shower Shape Comparisons vs.\ ATLAS Fudge Factors}
+\label{sec:shower-vs-fudge}
+%% ====================================================================
+
+Data (cell-computed) versus original MC, M2 cell reweighting, and ATLAS fudge factors
+(stored-branch fudged MC).  Provides a direct comparison of the cell-reweighting
+correction against the existing ATLAS shower-shape corrections.
+""")
+        if have("rew_vs_fudge_integrated.pdf"):
+            L.append(r"\subsection*{Integrated (all $|\eta|$ bins)}")
+            L.append(three_panel("rew_vs_fudge_integrated.pdf", 1, 2, 3,
+                                 r"Integrated: Data vs.\ original MC, M2 reweighting, and ATLAS fudged MC."))
+
+        L.append(r"\subsection*{Per $|\eta|$ bin}")
+        for i, (lo, hi) in enumerate(ETA_BINS):
+            page = i + 1
+            L.append(rf"\subsubsection*{{{eta_label(lo, hi)}}}")
+            L.append(three_panel_3pdfs("rew_vs_fudge_reta.pdf",
+                                       "rew_vs_fudge_rphi.pdf",
+                                       "rew_vs_fudge_weta2.pdf",
+                                       page,
+                                       rf"Shower shapes vs.\ fudge factors, {eta_label(lo, hi)}."))
+
+        if "eta_pt" in variant and have("rew_vs_fudge_reta_pt00.pdf"):
+            L.append(r"\subsection*{Per $p_{\mathrm{T}}$ bin}")
+            for ip, (ptlo, pthi) in enumerate(PT_BINS):
+                ptf = f"pt{ip:02d}"
+                reta_vf = f"rew_vs_fudge_reta_{ptf}.pdf"
+                rphi_vf = f"rew_vs_fudge_rphi_{ptf}.pdf"
+                weta_vf = f"rew_vs_fudge_weta2_{ptf}.pdf"
+                if not have(reta_vf):
+                    continue
+                n_pages_vf = pdf_pages(os.path.join(plots_dir, reta_vf))
+                L.append(rf"\subsubsection{{{pt_label(ptlo, pthi)}}}")
+                for i, (lo, hi) in enumerate(ETA_BINS):
+                    page = i + 1
+                    if page > n_pages_vf:
+                        break
+                    L.append(rf"\paragraph*{{{eta_label(lo, hi)}}}")
+                    L.append(three_panel_3pdfs(reta_vf, rphi_vf, weta_vf,
+                                               page,
+                                               rf"Shower shapes vs.\ fudge, {pt_label(ptlo, pthi)}, {eta_label(lo, hi)}."))
+        L.append(r"\clearpage")
 
     # ── Section 4: Fudge Factor Comparison (Integrated) ──
     L.append(r"""
@@ -420,8 +538,61 @@ $(\eta \times \phi)$ grid.  Each page shows one $|\eta|$ bin.
                 L.append(r"\end{figure}")
         L.append(r"\clearpage")
 
-    # ── Section 8b: Per-pT Cell Energy Fraction Profiles + Corrections (eta_pt only) ──
-    if have("cell_data_pt00.pdf"):
+    # ── Section 8b: Per-mu Cell Energy Fraction Profiles (eta_mu only) ──
+    if have("cell_data_mu00.pdf"):
+        mu_cell_pdfs = ["cell_data", "cell_mc", "cell_mc_m1", "cell_mc_m2"]
+        mu_cell_caps = {"cell_data": "Data", "cell_mc": "MC (uncorrected)",
+                        "cell_mc_m1": "MC after M1", "cell_mc_m2": "MC after M2"}
+        L.append(r"""
+%% ====================================================================
+\section{Per-$\langle\mu\rangle$ Cell Energy Fraction Profiles}
+\label{sec:cell-profiles-mu}
+%% ====================================================================
+
+Mean cell energy fraction maps and corrections per $\langle\mu\rangle$ bin.
+""")
+        for imu, (mulo, muhi) in enumerate(MU_BINS):
+            muf = f"mu{imu:02d}"
+            avail = [p for p in mu_cell_pdfs if have(f"{p}_{muf}.pdf")]
+            if not avail:
+                continue
+            n_pages_mu = pdf_pages(os.path.join(plots_dir, f"{avail[0]}_{muf}.pdf"))
+            sf  = f"cell_shift_{muf}.pdf"
+            stf = f"cell_stretch_{muf}.pdf"
+            have_corr = have(sf) and have(stf)
+            sf_pages  = pdf_pages(os.path.join(plots_dir, sf))  if have_corr else 0
+            stf_pages = pdf_pages(os.path.join(plots_dir, stf)) if have_corr else 0
+            L.append(rf"\subsection{{{mu_label(mulo, muhi)}}}")
+            for i, (lo, hi) in enumerate(ETA_BINS):
+                page = i + 1
+                if page > n_pages_mu:
+                    break
+                L.append(rf"\subsubsection*{{{eta_label(lo, hi)}}}")
+                fnames = [f"{p}_{muf}.pdf" for p in avail]
+                if len(fnames) >= 4:
+                    L.append(four_panel(fnames[0], fnames[1], fnames[2], fnames[3],
+                                        page,
+                                        [mu_cell_caps[p] for p in avail[:4]],
+                                        rf"Cell energy fraction maps, {mu_label(mulo, muhi)}, {eta_label(lo, hi)}."))
+                else:
+                    L.append(r"\begin{figure}[H]")
+                    L.append(r"\centering")
+                    w = f"{round(0.96/len(fnames), 2):.2f}"
+                    for fn, p in zip(fnames, avail):
+                        L.append(rf"\begin{{subfigure}}[b]{{{w}\textwidth}}")
+                        L.append(rf"  \includegraphics[width=\textwidth,page={page}]{{{fn}}}")
+                        L.append(rf"  \caption{{{mu_cell_caps[p]}}}")
+                        L.append(r"\end{subfigure}\hfill")
+                    L.append(rf"\caption{{Cell energy fraction maps, {mu_label(mulo, muhi)}, {eta_label(lo, hi)}.}}")
+                    L.append(r"\end{figure}")
+                if have_corr and page <= sf_pages and page <= stf_pages:
+                    L.append(two_panel(sf, stf, page,
+                                       r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
+                                       rf"Correction maps, {mu_label(mulo, muhi)}, {eta_label(lo, hi)}."))
+            L.append(r"\clearpage")
+
+    # ── Section 8c: Per-pT Cell Energy Fraction Profiles + Corrections (eta_pt only) ──
+    if "eta_pt" in variant and have("cell_data_pt00.pdf"):
         pt_cell_pdfs = ["cell_data", "cell_mc", "cell_mc_m1", "cell_mc_m2"]
         pt_cell_caps = {"cell_data": "Data", "cell_mc": "MC (uncorrected)",
                         "cell_mc_m1": "MC after M1", "cell_mc_m2": "MC after M2"}
@@ -475,10 +646,11 @@ Mean cell energy fraction maps and corrections per $p_{\mathrm{T}}$ bin.
                                        rf"Correction maps, {pt_label(ptlo, pthi)}, {eta_label(lo, hi)}."))
             L.append(r"\clearpage")
 
-    # ── Section 9: Cell-Level Corrections ──
-    shift_pages = pdf_pages(os.path.join(plots_dir, "cell_shift.pdf"))
-    stretch_pages = pdf_pages(os.path.join(plots_dir, "cell_stretch.pdf"))
-    L.append(r"""
+    # ── Section 9: Cell-Level Corrections (eta-only variants only) ──
+    if "eta_pt" not in variant and "eta_mu" not in variant:
+        shift_pages = pdf_pages(os.path.join(plots_dir, "cell_shift.pdf"))
+        stretch_pages = pdf_pages(os.path.join(plots_dir, "cell_stretch.pdf"))
+        L.append(r"""
 %% ====================================================================
 \section{Cell-Level Corrections}
 \label{sec:cell-corrections}
@@ -486,15 +658,13 @@ Mean cell energy fraction maps and corrections per $p_{\mathrm{T}}$ bin.
 
 M1 shift ($\Delta_k$) and M2 stretch ($s_k$) maps per $|\eta|$ bin.
 """)
-    if shift_pages >= NBINS and stretch_pages >= NBINS:
-        for i, (lo, hi) in enumerate(ETA_BINS):
-            page = i + 1
-            L.append(rf"\subsection*{{{eta_label(lo, hi)}}}")
-            L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
-                               r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
-                               rf"Correction maps, {eta_label(lo, hi)}."))
-    else:
-        L.append(r"\textit{Cell-level correction plots not available (see per-$p_{\mathrm{T}}$ section below).}")
+        if shift_pages >= NBINS and stretch_pages >= NBINS:
+            for i, (lo, hi) in enumerate(ETA_BINS):
+                page = i + 1
+                L.append(rf"\subsection*{{{eta_label(lo, hi)}}}")
+                L.append(two_panel("cell_shift.pdf", "cell_stretch.pdf", page,
+                                   r"M2 shift ($a_k$)", r"M2 stretch ($s_k$)",
+                                   rf"Correction maps, {eta_label(lo, hi)}."))
 
     L.append(r"""
 \end{document}""")
@@ -542,14 +712,15 @@ for variant, variant_desc in VARIANTS.items():
             print(f"[skip] {variant}/{channel}/{scenario} not found")
             continue
 
-        tex_name = f"result_compendium_{channel}_{scenario}.tex"
+        tex_name = f"result_compendium_{variant}_{channel}_{scenario}.tex"
         tag = f"{variant}/{scenario}"
         print(f"Building {tag} ...", end=" ", flush=True)
 
         chi2_table = extract_chi2_table(chi2_tables_path, channel, scenario) if os.path.isfile(chi2_tables_path) else None
 
+        report_dir = os.path.join(BASE, variant, "report")
         plots_dir = os.path.join(sc_dir, "plots")
-        tex = build_tex(channel, scenario, variant_desc, chi2_table, plots_dir)
+        tex = build_tex(channel, scenario, variant_desc, chi2_table, plots_dir, report_dir, variant)
 
         if compile_tex(tex, sc_dir, tex_name):
             ok.append(tag)

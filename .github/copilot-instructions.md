@@ -215,8 +215,10 @@ Variable names: `reta`, `rphi`, `weta2`. Tags: `data`, `data_stored`, `mc`, `mc_
 | `eta_tight` | 14 eta bins | Tight | `[14][1][77]` |
 | `eta_pt_loose` | 14 eta × 6 pT bins | Loose | `[14][6][77]` |
 | `eta_pt_tight` | 14 eta × 6 pT bins | Tight | `[14][6][77]` |
+| `eta_mu_loose` | 14 eta × 4 ⟨μ⟩ bins | Loose | `[14][4][77]` |
 
 pT bins (GeV): [10, 15, 20, 25, 30, 40, 1000]. Defined in `config.h` as `kPtLimits`.
+⟨μ⟩ bins: [0, 40, 55, 70, 120]. Defined in `config.h` as `kMuLimits`.
 
 `plot_shower_shapes.C(channel, scenario, baseDir, binning="eta", isolation="loose")` produces:
 - `rew_{reta,rphi,weta2}.pdf` — per-eta shower shape comparison (Data, MC, M1, M2)
@@ -224,14 +226,20 @@ pT bins (GeV): [10, 15, 20, 25, 30, 40, 1000]. Defined in `config.h` as `kPtLimi
 - `computed_vs_stored.pdf`, `computed_vs_stored_eta.pdf` — cell-computed vs branch values
 - `fudge_factors.pdf`, `fudge_factors_eta.pdf` — fudge factor comparison
 - When `binning="eta_pt"`: `rew_{var}_pt{PP}.pdf` — per-pT shower shape comparison
+- When `binning="eta_mu"`: `rew_{var}_mu{PP}.pdf` — per-⟨μ⟩ shower shape comparison
 
 `plot_cell_profiles.C(channel, scenario, baseDir, binning="eta", isolation="loose")` produces:
 - `cell_{data,mc,mc_m1,mc_m2}.pdf` — 7×11 cell heatmaps per eta
 - `cell_{shift,stretch}.pdf` — correction vector maps per eta
 - When `binning="eta_pt"`: `cell_{type}_pt{PP}.pdf` — per-pT cell heatmaps
+- When `binning="eta_mu"`: `cell_{type}_mu{PP}.pdf` — per-⟨μ⟩ cell heatmaps
+
+`plot_mu_scaling.C(baseDir, channel, scenario)` — for `eta_mu` variants only — produces:
+- `plots/mu_chi2_scaling.pdf` — χ²/ndf vs ⟨μ⟩ bin for MC/M1/M2, one page per |η| bin
+- `plots/mu_m1_shift_scaling.pdf` — mean |M1 shift| per cell vs ⟨μ⟩ bin, one page per |η| bin
 
 Output base directory: `output/Layer_2/{variant}/{channel}/{scenario}/`
-where `variant` is one of `eta_loose`, `eta_tight`, `eta_pt_loose`, `eta_pt_tight`.
+where `variant` is one of `eta_loose`, `eta_tight`, `eta_pt_loose`, `eta_pt_tight`, `eta_mu_loose`.
 (at repo root, **not** inside `scripts/data_mc/`; scripts use relative path `../../output/Layer_2/...`)
 
 ---

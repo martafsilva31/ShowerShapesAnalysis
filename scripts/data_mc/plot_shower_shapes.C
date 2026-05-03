@@ -331,7 +331,7 @@ int plot_shower_shapes(const char* channel   = "eegamma",
 
             drawPanel(hv, labels, colors, styles,
                       v.title, n, chLabel, scenLabel, c,
-                      nullptr, nullptr, 0.56, 0.67, 0.93, 0.90);
+                      nullptr, nullptr, 0.57, 0.60, 0.94, 0.87);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -370,7 +370,7 @@ int plot_shower_shapes(const char* channel   = "eegamma",
 
                     drawPanel(hv, labels, colors, styles,
                               v.title, n, chLabel, scenLabel, c,
-                              nullptr, ptBinLabel(p), 0.56, 0.67, 0.93, 0.90);
+                              nullptr, ptBinLabel(p), 0.57, 0.60, 0.94, 0.87);
                     c->Print(pdfPath);
                 }
                 c->Print(pdfPath + "]");
@@ -406,7 +406,119 @@ int plot_shower_shapes(const char* channel   = "eegamma",
 
             drawPanel(hv, labels, colors, styles,
                       v.title, 0, chLabel, scenLabel, c,
-                      nullptr, nullptr, 0.56, 0.67, 0.93, 0.90);
+                      "", nullptr, 0.57, 0.60, 0.94, 0.87);
+            c->Print(pdfPath);
+        }
+        c->Print(pdfPath + "]");
+    }
+
+    // ================================================================
+    // SET C -- Data, MC (original), M2, Fudged  (no M1)
+    // Same style as SET B but without shift-only and with ATLAS fudged MC.
+    // Produces: rew_vs_fudge_reta.pdf, rew_vs_fudge_rphi.pdf, rew_vs_fudge_weta2.pdf
+    // ================================================================
+    for (auto& v : vars) {
+        TString pdfPath = dir + Form("rew_vs_fudge_%s.pdf", v.name);
+        std::cout << "Set C " << v.title << ": " << pdfPath << std::endl;
+        c->Print(pdfPath + "[");
+
+        for (int n = 0; n < kNEtaBins; ++n) {
+            TString s = Form("_eta%02d", n);
+            TH1D* hData = (TH1D*)f->Get(Form("h_%s_data%s",      v.name, s.Data()));
+            TH1D* hMC   = (TH1D*)f->Get(Form("h_%s_mc%s",        v.name, s.Data()));
+            TH1D* hM2   = (TH1D*)f->Get(Form("h_%s_mc_M2%s",     v.name, s.Data()));
+            TH1D* hFud  = (TH1D*)f->Get(Form("h_%s_mc_fudged%s", v.name, s.Data()));
+            if (!hData || !hMC || !hM2) continue;
+            if (hData->GetEntries() < 100) continue;
+
+            std::vector<TH1D*> hv     = {hData, hMC, hM2};
+            std::vector<TString> labels = {"Data", "Original MC",
+                                            "MC reweighted (shift+stretch)"};
+            std::vector<int> colors   = {kBlack, kRed, kBlue};
+            std::vector<int> styles   = {1, 1, 1};
+            if (hFud) {
+                hv.push_back(hFud);
+                labels.push_back("MC fudged");
+                colors.push_back(kGreen + 2);
+                styles.push_back(1);
+            }
+            zoomNorm(hv, hv[0]);
+            drawPanel(hv, labels, colors, styles,
+                      v.title, n, chLabel, scenLabel, c,
+                      nullptr, nullptr, 0.57, 0.60, 0.94, 0.87);
+            c->Print(pdfPath);
+        }
+        c->Print(pdfPath + "]");
+    }
+
+    // ── SET C per-(eta,pT) — only in eta_pt mode ────────────────────────────
+    if (usePtBins) {
+        for (int p = 0; p < kNPtBins; ++p) {
+            for (auto& v : vars) {
+                TString pdfPath = dir + Form("rew_vs_fudge_%s_pt%02d.pdf", v.name, p);
+                std::cout << "Set C per-pT " << v.title
+                          << " pT bin " << p << ": " << pdfPath << std::endl;
+                c->Print(pdfPath + "[");
+
+                for (int n = 0; n < kNEtaBins; ++n) {
+                    TString s = Form("_eta%02d_pt%02d", n, p);
+                    TH1D* hData = (TH1D*)f->Get(Form("h_%s_data%s",      v.name, s.Data()));
+                    TH1D* hMC   = (TH1D*)f->Get(Form("h_%s_mc%s",        v.name, s.Data()));
+                    TH1D* hM2   = (TH1D*)f->Get(Form("h_%s_mc_M2%s",     v.name, s.Data()));
+                    TH1D* hFud  = (TH1D*)f->Get(Form("h_%s_mc_fudged%s", v.name, s.Data()));
+                    if (!hData || !hMC || !hM2) continue;
+                    if (hData->GetEntries() < 50) continue;
+
+                    std::vector<TH1D*> hv     = {hData, hMC, hM2};
+                    std::vector<TString> labels = {"Data", "Original MC",
+                                                    "MC reweighted (shift+stretch)"};
+                    std::vector<int> colors   = {kBlack, kRed, kBlue};
+                    std::vector<int> styles   = {1, 1, 1};
+                    if (hFud) {
+                        hv.push_back(hFud);
+                        labels.push_back("MC fudged");
+                        colors.push_back(kGreen + 2);
+                        styles.push_back(1);
+                    }
+                    zoomNorm(hv, hv[0]);
+                    drawPanel(hv, labels, colors, styles,
+                              v.title, n, chLabel, scenLabel, c,
+                              nullptr, ptBinLabel(p), 0.57, 0.60, 0.94, 0.87);
+                    c->Print(pdfPath);
+                }
+                c->Print(pdfPath + "]");
+            }
+        }
+    }
+
+    // ── SET C integrated ──────────────────────────────────────────────────────
+    {
+        TString pdfPath = dir + "rew_vs_fudge_integrated.pdf";
+        std::cout << "Set C integrated: " << pdfPath << std::endl;
+        c->Print(pdfPath + "[");
+
+        for (auto& v : vars) {
+            TH1D* hData = (TH1D*)f->Get(Form("h_%s_data_computed", v.name));
+            TH1D* hMC   = (TH1D*)f->Get(Form("h_%s_mc_computed",   v.name));
+            TH1D* hM2   = (TH1D*)f->Get(Form("h_%s_mc_M2",         v.name));
+            TH1D* hFud  = (TH1D*)f->Get(Form("h_%s_mc_fudged",     v.name));
+            if (!hData || !hMC || !hM2) continue;
+
+            std::vector<TH1D*> hv     = {hData, hMC, hM2};
+            std::vector<TString> labels = {"Data", "Original MC",
+                                            "MC reweighted (shift+stretch)"};
+            std::vector<int> colors   = {kBlack, kRed, kBlue};
+            std::vector<int> styles   = {1, 1, 1};
+            if (hFud) {
+                hv.push_back(hFud);
+                labels.push_back("MC fudged");
+                colors.push_back(kGreen + 2);
+                styles.push_back(1);
+            }
+            zoomNorm(hv, hv[0]);
+            drawPanel(hv, labels, colors, styles,
+                      v.title, 0, chLabel, scenLabel, c,
+                      "", nullptr, 0.57, 0.60, 0.94, 0.87);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -435,7 +547,7 @@ int plot_shower_shapes(const char* channel   = "eegamma",
 
             drawPanel(hv, labels, colors, styles,
                       v.title, 0, chLabel, scenLabel, c,
-                      nullptr, nullptr, 0.65, 0.70, 0.96, 0.92);
+                      "", nullptr, 0.62, 0.70, 0.96, 0.92);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -467,7 +579,7 @@ int plot_shower_shapes(const char* channel   = "eegamma",
 
                 drawPanel(hv, labels, colors, styles,
                           v.title, n, chLabel, scenLabel, c,
-                          nullptr, nullptr, 0.65, 0.70, 0.96, 0.92);
+                          nullptr, nullptr, 0.62, 0.70, 0.96, 0.92);
                 c->Print(pdfPath);
             }
         }
@@ -493,14 +605,14 @@ int plot_shower_shapes(const char* channel   = "eegamma",
             zoomNorm(hv, hv[0]);
 
             std::vector<TString> labels = {
-                "Data", "MC (fudged)", "MC (unfudged)"
+                "Data", "MC fudged", "MC unfudged"
             };
             std::vector<int> colors = {kBlack, kBlue, kRed};
             std::vector<int> styles = {1, 1, 2};
 
             drawPanel(hv, labels, colors, styles,
                       v.title, 0, chLabel, scenLabel, c,
-                      nullptr, nullptr, 0.65, 0.62, 0.96, 0.88);
+                      "", nullptr, 0.59, 0.62, 0.96, 0.88);
             c->Print(pdfPath);
         }
         c->Print(pdfPath + "]");
@@ -528,14 +640,14 @@ int plot_shower_shapes(const char* channel   = "eegamma",
                 zoomNorm(hv, hv[0]);
 
                 std::vector<TString> labels = {
-                    "Data", "MC (fudged)", "MC (unfudged)"
+                    "Data", "MC fudged", "MC unfudged"
                 };
                 std::vector<int> colors = {kBlack, kBlue, kRed};
                 std::vector<int> styles = {1, 1, 2};
 
                 drawPanel(hv, labels, colors, styles,
                           v.title, n, chLabel, scenLabel, c,
-                          nullptr, nullptr, 0.65, 0.62, 0.96, 0.88);
+                          nullptr, nullptr, 0.59, 0.62, 0.96, 0.88);
                 c->Print(pdfPath);
             }
         }

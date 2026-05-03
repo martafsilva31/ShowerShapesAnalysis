@@ -52,8 +52,9 @@ BINNING[eta_loose]="eta";      ISOLATION[eta_loose]="loose"
 BINNING[eta_tight]="eta";      ISOLATION[eta_tight]="tight"
 BINNING[eta_pt_loose]="eta_pt"; ISOLATION[eta_pt_loose]="loose"
 BINNING[eta_pt_tight]="eta_pt"; ISOLATION[eta_pt_tight]="tight"
+BINNING[eta_mu_loose]="eta_mu"; ISOLATION[eta_mu_loose]="loose"
 
-ALL_VARIANTS=(eta_loose eta_tight eta_pt_loose eta_pt_tight)
+ALL_VARIANTS=(eta_loose eta_tight eta_pt_loose eta_pt_tight eta_mu_loose)
 VARIANTS_RUN=("${VARIANTS:-${ALL_VARIANTS[@]}}")
 
 # Parse VARIANTS from environment if set as a single string
@@ -126,9 +127,11 @@ done
 
 # ── Phase 3: Plots ───────────────────────────────────────────────
 echo ""
-echo ">>> Phase 3: Plotting (shower shapes + cell profiles)"
+echo ">>> Phase 3: Plotting (shower shapes + cell profiles, parallel)"
 echo ""
 
+PLOT_PIDS=()
+PLOT_LABELS=()
 for var in "${VARIANTS_RUN[@]}"; do
     BIN="${BINNING[$var]}"
     ISO="${ISOLATION[$var]}"
@@ -136,14 +139,27 @@ for var in "${VARIANTS_RUN[@]}"; do
 
     for ch in "${CHANNELS[@]}"; do
         for sc in "${SCENARIOS_ALL[@]}"; do
-            echo "  Plotting: ${var}/${ch}/${sc}"
-            root -l -b -q "plot_shower_shapes.C(\"${ch}\", \"${sc}\", \"${BASE}\", \"${BIN}\", \"${ISO}\")" || \
-                echo "  WARN: plot_shower_shapes failed for ${var}/${ch}/${sc}"
-            root -l -b -q "plot_cell_profiles.C(\"${ch}\", \"${sc}\", \"${BASE}\", \"${BIN}\", \"${ISO}\")" || \
-                echo "  WARN: plot_cell_profiles failed for ${var}/${ch}/${sc}"
+            PLTDIR="${BASE}/${ch}/${sc}/plots"
+            mkdir -p "${PLTDIR}"
+            echo "  Plotting (bg): ${var}/${ch}/${sc}"
+            root -l -b -q "plot_shower_shapes.C(\"${ch}\", \"${sc}\", \"${BASE}\", \"${BIN}\", \"${ISO}\")" \
+                > "${PLTDIR}/plot_shower_shapes.log" 2>&1 &
+            PLOT_PIDS+=($!)
+            PLOT_LABELS+=("plot_shower_shapes ${var}/${ch}/${sc}")
+            root -l -b -q "plot_cell_profiles.C(\"${ch}\", \"${sc}\", \"${BASE}\", \"${BIN}\", \"${ISO}\")" \
+                > "${PLTDIR}/plot_cell_profiles.log" 2>&1 &
+            PLOT_PIDS+=($!)
+            PLOT_LABELS+=("plot_cell_profiles ${var}/${ch}/${sc}")
         done
     done
 done
+
+echo "  Waiting for ${#PLOT_PIDS[@]} plot jobs..."
+for i in "${!PLOT_PIDS[@]}"; do
+    pid="${PLOT_PIDS[$i]}"
+    wait "${pid}" || echo "  WARN: ${PLOT_LABELS[$i]} (pid ${pid}) failed"
+done
+echo "  All plot jobs done."
 
 # ── Phase 4: Extract chi2 tables ─────────────────────────────────
 echo ""
@@ -155,32 +171,41 @@ for var in "${VARIANTS_RUN[@]}"; do
     REPORT="${BASE}/report"
     mkdir -p "${REPORT}"
     echo "  chi2: ${var}"
-    root -l -b -q "extract_chi2.C(\"${BASE}\", \"${REPORT}\")" || \
+    root -l -b -q "extract_chi2.C(\"${BASE}\", \"${REPORT}\", \"${BINNING[$var]}\")" || \
         echo "  WARN: extract_chi2 failed for ${var}"
 done
 
-# ── Phase 5: Generate compendia ──────────────────────────────────
+# ── Phase 5b: Pileup scaling plots (eta_mu variants only) ────────
 echo ""
-echo ">>> Phase 5: Generating compendia"
+echo ">>> Phase 5b: Pileup scaling plots (eta_mu variants)"
 echo ""
-
-# Check if updated make_compendiums_final.py exists; fall back to make_compendium.py
-COMP_SCRIPT="${OUTBASE}/make_compendiums_final.py"
-if [[ ! -f "${COMP_SCRIPT}" ]]; then
-    COMP_SCRIPT="${SCRIPTDIR}/make_compendium.py"
-fi
 
 for var in "${VARIANTS_RUN[@]}"; do
+    [[ "${BINNING[$var]}" != "eta_mu" ]] && continue
     BASE="${OUTBASE}/${var}"
-    echo "  compendium: ${var}"
-    if [[ -f "${OUTBASE}/make_compendiums_final.py" ]]; then
-        python3 "${OUTBASE}/make_compendiums_final.py" --variant "${var}" || \
-            echo "  WARN: make_compendiums_final failed for ${var}"
-    else
+    echo "  mu-scaling: ${var}"
+    for scen in "${SCENARIOS_ALL[@]}"; do
+        root -l -b -q "plot_mu_scaling.C(\"${BASE}\", \"llgamma\", \"${scen}\")" || \
+            echo "  WARN: plot_mu_scaling failed for ${var}/${scen}"
+    done
+done
+
+# ── Phase 6: Generate compendia ──────────────────────────────────
+echo ""
+echo ">>> Phase 6: Generating compendia"
+echo ""
+
+# make_compendiums.py lives in output/Layer_2/ and iterates all variants itself
+if [[ -f "${OUTBASE}/make_compendiums.py" ]]; then
+    python3 "${OUTBASE}/make_compendiums.py" || echo "  WARN: make_compendiums.py failed"
+else
+    for var in "${VARIANTS_RUN[@]}"; do
+        BASE="${OUTBASE}/${var}"
+        echo "  compendium: ${var}"
         python3 "${SCRIPTDIR}/make_compendium.py" --base-dir "${BASE}" --no-kinematics --channels llgamma || \
             echo "  WARN: make_compendium failed for ${var}"
-    fi
-done
+    done
+fi
 
 # ── Done ─────────────────────────────────────────────────────────
 echo ""

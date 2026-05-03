@@ -1,8 +1,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 // extract_comparison_final.C
 //
-// Compares chi-squared results across the 4 variants:
-//   eta_loose, eta_tight, eta_pt_loose, eta_pt_tight
+// Compares chi-squared results across the 5 variants:
+//   eta_loose, eta_tight, eta_pt_loose, eta_pt_tight, eta_mu_loose
 //
 // Reads the chi2_summary.tex from each variant's report/ and produces a
 // combined LaTeX comparison table in report/chi2_variant_comparison.tex.
@@ -67,13 +67,15 @@ void extract_comparison_final(
     const char* outBase   = "../../output/Layer_2",
     const char* reportDir = "../../report")
 {
-    const int nVar = 4;
+    const int nVar = 5;
     const char* variants[nVar] = {"eta_loose", "eta_tight",
-                                  "eta_pt_loose", "eta_pt_tight"};
+                                  "eta_pt_loose", "eta_pt_tight",
+                                  "eta_mu_loose"};
     const char* variantTeX[nVar] = {
         "$\\eta$ loose", "$\\eta$ tight",
         "$\\eta \\times p_{\\mathrm{T}}$ loose",
-        "$\\eta \\times p_{\\mathrm{T}}$ tight"};
+        "$\\eta \\times p_{\\mathrm{T}}$ tight",
+        "$\\eta \\times \\langle\\mu\\rangle$ loose"};
 
     const int nSS = 3;
     const char* ssNames[nSS]  = {"reta", "rphi", "weta2"};

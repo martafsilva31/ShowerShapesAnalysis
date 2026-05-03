@@ -25,13 +25,14 @@ ShowerShapesAnalysis/
 │   │   ├── run_closure_test.sh
 │   │   └── run_closure_suite.sh
 │   └── data_mc/               # Data-MC cell-energy reweighting (current)
-│       ├── config.h                # Shared config: cuts, branches, geometry, formulas, pT bins
-│       ├── fill_histograms.C       # Two-pass pipeline: accumulate → correct → fill (eta/eta_pt × loose/tight iso)
-│       ├── plot_shower_shapes.C    # Shower shape plots: per-eta PDFs + per-pT PDFs (eta_pt mode)
+│       ├── config.h                # Shared config: cuts, branches, geometry, formulas, pT/mu bins
+│       ├── fill_histograms.C       # Two-pass pipeline: accumulate → correct → fill (eta/eta_pt/eta_mu × loose/tight iso)
+│       ├── plot_shower_shapes.C    # Shower shape plots: per-eta PDFs + per-pT/per-mu PDFs
 │       ├── plot_cell_profiles.C    # 7×11 cell heatmaps + correction vector plots
+│       ├── plot_mu_scaling.C       # Pileup study: χ²/ndf and M1 shift vs ⟨μ⟩ (eta_mu variants)
 │       ├── extract_chi2.C          # Extract chi-squared tables for a single variant
 │       ├── extract_comparison_final.C  # Cross-variant chi2 comparison → report/chi2_variant_comparison.tex
-│       ├── run_layer2_final.sh     # Full pipeline driver: 4 variants (eta×{loose,tight} + eta_pt×{loose,tight})
+│       ├── run_layer2_final.sh     # Full pipeline driver: 5 variants (eta/eta_pt/eta_mu × loose/tight)
 │       └── old/                    # Archived previous-iteration scripts
 ├── grid/               # Grid submission scripts (pathena)
 │   ├── samples/        # Sample lists (dataset names)
@@ -46,12 +47,13 @@ ShowerShapesAnalysis/
 │   └── mc23e/          # MC23e (Zeeg 13 GB, Zmumug 23 GB)
 ├── output/             # Computed histograms + plots (gitignored)
 │   ├── old/            # Archived output from previous iteration
-│   └── Layer_2/        # Current output: 4 variants × 3 scenarios
+│   └── Layer_2/        # Current output: 5 variants × 3 scenarios
 │       ├── make_compendiums.py    # Generates LaTeX compendium PDFs for all variants
 │       ├── eta_loose/             # η-only binning, loose isolation
 │       ├── eta_tight/             # η-only binning, tight isolation
 │       ├── eta_pt_loose/          # η×pT binning (14×6 bins), loose isolation
-│       └── eta_pt_tight/          # η×pT binning (14×6 bins), tight isolation
+│       ├── eta_pt_tight/          # η×pT binning (14×6 bins), tight isolation
+│       └── eta_mu_loose/          # η×⟨μ⟩ binning (14×4 bins), loose isolation — pileup study
 │           └── {channel}/{scenario}/
 │               ├── histograms.root
 │               └── plots/  # shower shape PDFs, cell heatmaps, fudge factor plots
@@ -115,16 +117,18 @@ M2 is equivalent to Francisco's `photoncellbasedrw` method and is the **recommen
 **Channel**: `llgamma` (Z→eeγ + Z→μμγ combined)
 **Conversion scenarios**: `unconverted`, `converted`, `inclusive` (hadd of unc+conv)
 
-Four **pipeline variants** are studied:
+Five **pipeline variants** are studied:
 
 | Variant | Binning | Isolation |
-|---------|---------|-----------|
+|---------|---------|--------|
 | `eta_loose` | 14 η bins | Loose |
 | `eta_tight` | 14 η bins | Tight |
 | `eta_pt_loose` | 14 η × 6 pT bins | Loose (**recommended**) |
 | `eta_pt_tight` | 14 η × 6 pT bins | Tight |
+| `eta_mu_loose` | 14 η × 4 ⟨μ⟩ bins | Loose (pileup study) |
 
 pT bins (GeV): [10, 15, 20, 25, 30, 40, 1000].
+⟨μ⟩ bins: [0, 40, 55, 70, 120].
 
 Selection: pT > 10 GeV, |η| < 2.37, crack [1.37,1.52] excluded, loose/tight isolation,
 mll ∈ [40, 83] GeV, mllg ∈ [80, 100] GeV, ΔR(lep, γ) > 0.4. No photon ID.
@@ -161,6 +165,9 @@ PDFs produced per scenario:
 - `rew_{reta,rphi,weta2}.pdf` — per-eta: Data vs MC, M1, M2 (14 pages/eta bin)
 - `rew_integrated.pdf` — all-eta integrated (3 pages)
 - `rew_{var}_pt{PP}.pdf` — per-pT shower shapes (eta_pt variants only, 6 PDFs × 3 vars)
+- `rew_{var}_mu{PP}.pdf` — per-⟨μ⟩ shower shapes (eta_mu variants only, 4 PDFs × 3 vars)
+- `mu_chi2_scaling.pdf` — χ²/ndf vs ⟨μ⟩ bin (eta_mu variants only)
+- `mu_m1_shift_scaling.pdf` — mean |M1 shift| vs ⟨μ⟩ bin (eta_mu variants only)
 - `computed_vs_stored.pdf`, `computed_vs_stored_eta.pdf` — cell-computed vs branch validation
 - `fudge_factors.pdf`, `fudge_factors_eta.pdf` — fudge factor comparison
 - `cell_{data,mc,mc_m1,mc_m2}.pdf` — 7×11 cell fraction heatmaps

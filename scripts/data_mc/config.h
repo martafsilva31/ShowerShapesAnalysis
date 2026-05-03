@@ -66,6 +66,14 @@ namespace config {
     };
 
     // ======================================================================
+    // Pileup (<mu>) binning (3 bins)
+    // ======================================================================
+    const int kNMuBins = 3;
+    const double kMuLimits[kNMuBins + 1] = {
+        0, 40, 55, 70
+    };
+
+    // ======================================================================
     // Selection scenario
     //
     // Baseline = Francisco's defaults:
@@ -207,6 +215,17 @@ namespace config {
         return buf.Data();
     }
 
+    // mu bin label for plots: "40 < <#mu> < 55"
+    inline const char* muBinLabel(int muBin) {
+        static TString buf;
+        if (muBin < 0 || muBin >= kNMuBins) { buf = ""; return buf.Data(); }
+        if (kMuLimits[muBin + 1] >= 119)
+            buf = Form("<#mu> > %.0f", kMuLimits[muBin]);
+        else
+            buf = Form("%.0f < <#mu> < %.0f", kMuLimits[muBin], kMuLimits[muBin + 1]);
+        return buf.Data();
+    }
+
     // ======================================================================
     // Branch names for data24 / MC23e ntuples (from NTupleMaker)
     // ======================================================================
@@ -245,6 +264,7 @@ namespace config {
     // MC weights
     const char* const kMCWeightBranch  = "event.mcwgt";
     const char* const kPUWeightBranch  = "event.muwgt";
+    const char* const kAvgMuBranch     = "event.avgmu";  // average interactions per crossing
     const char* const kXSecBranch      = "event.xsec";
     const char* const kBSWeightBranch  = "event.beamspotwgt";
     const char* const kLepton1SFBranch = "lepton1.SF";
@@ -279,6 +299,13 @@ namespace config {
     inline int findPtBin(double pt) {
         for (int n = 0; n < kNPtBins; ++n)
             if (pt >= kPtLimits[n] && pt < kPtLimits[n + 1])
+                return n;
+        return -1;
+    }
+
+    inline int findMuBin(double mu) {
+        for (int n = 0; n < kNMuBins; ++n)
+            if (mu >= kMuLimits[n] && mu < kMuLimits[n + 1])
                 return n;
         return -1;
     }

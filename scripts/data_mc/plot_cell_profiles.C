@@ -68,7 +68,7 @@ void drawCellMap(TH2D* hIn,
     c->SetLeftMargin(0.12);
     c->SetRightMargin(0.18);
     c->SetBottomMargin(0.12);
-    c->SetTopMargin(ptLabel ? 0.20 : 0.16);
+    c->SetTopMargin(ptLabel ? 0.17 : 0.16);
 
     hIn->SetStats(0);
     hIn->SetTitle("");
@@ -118,33 +118,34 @@ void drawCellMap(TH2D* hIn,
     lat.SetNDC();
     lat.SetTextFont(42);
 
-    double row1Y = ptLabel ? 0.965 : 0.955;
-    double row2Y = ptLabel ? 0.920 : 0.895;
-    double row3Y = 0.875;
+    // Col 1 (left 0.03): ATLAS WiP / sqrt(s)
+    // Col 2 (center, aligned with plot content): etaLabel / ptLabel
+    //   left margin=0.12, right margin=0.18 → plot centre at NDC x≈0.47
+    // Col 3 (right 0.97): chLabel / scenLabel
+    double row1Y = ptLabel ? 0.955 : 0.955;
+    double row2Y = ptLabel ? 0.900 : 0.895;
 
     // Row 1
     lat.SetTextSize(0.038);
     lat.SetTextAlign(11);
     lat.DrawLatex(0.03, row1Y, "#bf{#it{ATLAS}} Work in Progress");
-    lat.DrawLatex(0.36, row1Y, chLabel);
+    lat.SetTextSize(0.033);
+    lat.SetTextAlign(22);
+    lat.DrawLatex(0.47, row1Y, etaLabel);
     lat.SetTextAlign(31);
-    lat.DrawLatex(0.97, row1Y, typeLabel);
+    lat.DrawLatex(0.97, row1Y, chLabel);
 
     // Row 2
     lat.SetTextSize(0.033);
     lat.SetTextAlign(11);
     lat.DrawLatex(0.03, row2Y, "#sqrt{s} = 13.6 TeV");
-    lat.DrawLatex(0.36, row2Y, etaLabel);
+    if (ptLabel) {
+        lat.SetTextAlign(22);
+        lat.DrawLatex(0.47, row2Y, ptLabel);
+    }
     lat.SetTextSize(0.028);
     lat.SetTextAlign(31);
     lat.DrawLatex(0.97, row2Y, scenLabel);
-
-    // Row 3 (pT label, optional)
-    if (ptLabel) {
-        lat.SetTextSize(0.033);
-        lat.SetTextAlign(11);
-        lat.DrawLatex(0.36, row3Y, ptLabel);
-    }
 }
 
 
@@ -161,7 +162,11 @@ int plot_cell_profiles(const char* channel   = "eegamma",
     const char* scenLabel = scenarioLabel(scenario, isolation);
 
     TString binMode(binning);
-    bool usePtBins = (binMode == "eta_pt");
+    bool usePtBins  = (binMode == "eta_pt");
+    bool useMuBins  = (binMode == "eta_mu");
+    bool useSecBins = usePtBins || useMuBins;
+    int  nSecBins   = usePtBins ? kNPtBins : useMuBins ? kNMuBins : 0;
+    TString secTag  = usePtBins ? "pt" : useMuBins ? "mu" : "";
 
     gStyle->SetOptStat(0);
     gStyle->SetPalette(88);
@@ -184,8 +189,8 @@ int plot_cell_profiles(const char* channel   = "eegamma",
     TCanvas* c = new TCanvas("c", "Cell Profiles", 800, 600);
 
     auto etaLbl = [](int n) -> TString {
-        return Form("Bin %d:  %.2f < |#eta| < %.2f",
-                    n, kEtaLimits[n], kEtaLimits[n + 1]);
+        return Form("%.2f < |#eta| < %.2f",
+                    kEtaLimits[n], kEtaLimits[n + 1]);
     };
 
     auto nonEmpty = [](TH2D* h) -> bool {
@@ -196,10 +201,10 @@ int plot_cell_profiles(const char* channel   = "eegamma",
         return false;
     };
 
-    // Correction histogram suffix: eta-only or eta_pt
+    // Correction histogram suffix: eta-only or eta_sec
     auto corrSuf = [&](int e, int p = -1) -> TString {
-        if (usePtBins && p >= 0)
-            return Form("_eta%02d_pt%02d", e, p);
+        if (useSecBins && p >= 0)
+            return Form("_eta%02d_%s%02d", e, secTag.Data(), p);
         return Form("_eta%02d", e);
     };
 
@@ -224,6 +229,7 @@ int plot_cell_profiles(const char* channel   = "eegamma",
 
     // ---- eta-only profiles ----
     for (auto& m : maps) {
+        if (m.isCorrHist && useSecBins) continue;  // shift/stretch only meaningful in eta-only mode
         TString pdf = dir + Form("%s.pdf", m.fileName);
         std::cout << "Creating: " << pdf << std::endl;
         c->Print(pdf + "[");
@@ -276,14 +282,16 @@ int plot_cell_profiles(const char* channel   = "eegamma",
     }
 
     // ================================================================
-    // Per-pT cell profile PDFs (only in eta_pt mode)
+    // Per-sec cell profile PDFs (in eta_pt and eta_mu modes)
+    // eta_pt produces: cell_<type>_pt<PP>.pdf
+    // eta_mu produces: cell_<type>_mu<MM>.pdf
     // ================================================================
-    if (usePtBins) {
-        for (int p = 0; p < kNPtBins; ++p) {
-            const char* ptLbl = ptBinLabel(p);
+    if (useSecBins) {
+        for (int p = 0; p < nSecBins; ++p) {
+            const char* secLbl = usePtBins ? ptBinLabel(p) : muBinLabel(p);
 
             for (auto& m : maps) {
-                TString pdf = dir + Form("%s_pt%02d.pdf", m.fileName, p);
+                TString pdf = dir + Form("%s_%s%02d.pdf", m.fileName, secTag.Data(), p);
                 std::cout << "Creating: " << pdf << std::endl;
                 c->Print(pdf + "[");
                 for (int n = 0; n < kNEtaBins; ++n) {
@@ -301,23 +309,23 @@ int plot_cell_profiles(const char* channel   = "eegamma",
                         for (int k = 1; k <= kClusterSize; ++k)
                             if (h1->GetBinContent(k) != 0) { ok = true; break; }
                         if (!ok) continue;
-                        TH2D* h2 = corrTo2D(h1, Form("%s_pt%d_2d_%d", m.fileName, p, n));
-                        drawCellMap(h2, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                        TH2D* h2 = corrTo2D(h1, Form("%s_%s%d_2d_%d", m.fileName, secTag.Data(), p, n));
+                        drawCellMap(h2, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, secLbl);
                         c->Print(pdf);
                         delete h2;
                     } else {
                         TH2D* h = (TH2D*)f->Get(hname);
                         if (!nonEmpty(h)) continue;
-                        drawCellMap(h, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                        drawCellMap(h, m.typeLabel, chLabel, etaLbl(n), scenLabel, c, secLbl);
                         c->Print(pdf);
                     }
                 }
                 c->Print(pdf + "]");
             }
 
-            // M1 per-pT
+            // M1 per-sec
             {
-                TString pdf = dir + Form("cell_mc_m1_pt%02d.pdf", p);
+                TString pdf = dir + Form("cell_mc_m1_%s%02d.pdf", secTag.Data(), p);
                 std::cout << "Creating: " << pdf << std::endl;
                 c->Print(pdf + "[");
                 for (int n = 0; n < kNEtaBins; ++n) {
@@ -325,9 +333,9 @@ int plot_cell_profiles(const char* channel   = "eegamma",
                     TH2D* hMC    = (TH2D*)f->Get(Form("cell_profiles/h_frac_mean_mc%s", suf.Data()));
                     TH2D* hDelta = (TH2D*)f->Get(Form("cell_profiles/h_frac_delta%s", suf.Data()));
                     if (!nonEmpty(hMC) || !hDelta) continue;
-                    TH2D* hM1 = (TH2D*)hMC->Clone(Form("cellsM1_pt%d_%d", p, n));
+                    TH2D* hM1 = (TH2D*)hMC->Clone(Form("cellsM1_%s%d_%d", secTag.Data(), p, n));
                     hM1->Add(hDelta);
-                    drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaLbl(n), scenLabel, c, ptLbl);
+                    drawCellMap(hM1, "MC after M1 reweighting", chLabel, etaLbl(n), scenLabel, c, secLbl);
                     c->Print(pdf);
                     delete hM1;
                 }
